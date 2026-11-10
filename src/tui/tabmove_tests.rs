@@ -46,12 +46,12 @@ fn open_key() -> Key {
 
 // A single listing row for the open-tab branches below.
 fn folder_row() -> crate::tui::model::Row {
-    crate::tui::model::Row { name: "sub".into(), directory: true, size: 0, mode: 0o40755, link: String::new(), kind: String::new(), thumbnail: false, modified: 0, icon: String::new() }
+    crate::tui::model::Row { name: "sub".into(), directory: true, size: 0, mode: 0o40755, link: String::new(), kind: String::new(), thumbnail: false, modified: 0, birth: None, icon: String::new() }
 }
 
 // A file row refuses the same chord the folder row above accepts.
 fn file_row() -> crate::tui::model::Row {
-    crate::tui::model::Row { name: "note.txt".into(), directory: false, size: 3, mode: 0o100644, link: String::new(), kind: String::new(), thumbnail: false, modified: 0, icon: String::new() }
+    crate::tui::model::Row { name: "note.txt".into(), directory: false, size: 3, mode: 0o100644, link: String::new(), kind: String::new(), thumbnail: false, modified: 0, birth: None, icon: String::new() }
 }
 
 #[test]
@@ -124,5 +124,37 @@ fn reorder_keys_move_the_current_tab_and_send_nothing() {
     press(&mut model, &mut wire, &move_key("}"));
     assert_eq!(cursors(&model), vec![10, 20, 30], "}} on the last tab is a no-op");
     assert_eq!(model.tab, 2, "and stays current");
+    finish(wire, reader);
+}
+
+// Issue 390: a switch's list names every other tab's folder, so the backend keeps their settled sizes.
+#[test]
+fn a_tab_switch_names_the_other_tabs_folders_in_its_list() {
+    let (mut wire, reader) = echo_wire();
+    let mut model = Model::new(PathBuf::from("/listing"), &Json::Null);
+    press(&mut model, &mut wire, &Key::character('t', ""));
+    settle_open(&mut model, &mut wire);
+    model.tabs[0].path = PathBuf::from("/elsewhere");
+    press(&mut model, &mut wire, &Key::character('1', ""));
+    let sent = drain(&mut wire);
+    let list = super::sort_tests::requests(&sent, "list");
+    assert_eq!(list.len(), 1, "one switch lists once");
+    assert_eq!(
+        text(list[0], "path"),
+        "/elsewhere",
+        "the switch lists the first tab's folder"
+    );
+    let keep: Vec<&str> = list[0]
+        .get("keep")
+        .and_then(Json::as_array)
+        .unwrap()
+        .iter()
+        .filter_map(Json::as_str)
+        .collect();
+    assert_eq!(
+        keep,
+        vec!["/listing"],
+        "and keeps the folder the second tab shows, never its own"
+    );
     finish(wire, reader);
 }

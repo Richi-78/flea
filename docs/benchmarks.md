@@ -89,13 +89,22 @@ A GUI run that never asks for thumbnails (the scale fixture) does not touch this
 - **`drm_kb`**: GPU-resident system memory from `/proc/<pid>/fdinfo/*` (`drm-resident-system0`),
   de-duplicated by DRM client id since several file descriptors can share one client. This is
   memory PSS cannot see at all, so it is read once after settle rather than polled.
+  NVIDIA's proprietary driver publishes no `drm-resident` key, so a process holding an NVIDIA GPU
+  node (`/dev/nvidiaN`) also adds the driver's own per-process `used_memory` from
+  `nvidia-smi --query-compute-apps`, which is video memory rather than system memory. Without
+  that, a GPUI entrant rendering on NVIDIA reads as the `0` of the idle iGPU client it opened while
+  enumerating adapters. When the driver does not list the process, the column is `unmeasurable`,
+  never a total that leaves the NVIDIA device out.
   **A quickshell process resident on the bench box shares its Qt libraries with any Qt entrant
   launched afterward**, so a Qt entrant's PSS is charged roughly half of what those libraries
   would cost in isolation, while a GTK entrant's libraries are shared with nothing and charged in
   full. This is a property of the box's own state at run time, not of the entrant, and is worth
   stating beside any PSS comparison that includes both toolkits.
-- **`cpu_s` / `cpu_tree_s`**: CPU seconds at the settle point. `cpu_s` is `utime + stime` of the
-  entrant process alone. `cpu_tree_s` is `usage_usec` of a control group the run made for this
+- **`cpu_s` / `cpu_tree_s` / `cpu_main_s`**: CPU seconds at the settle point. `cpu_s` equals
+  `cpu_tree_s`, and `cpu_main_s` is `utime + stime` of the entrant process alone. Rows written
+  before `cpu_main_s` existed carry that process-only figure under `cpu_s`, so an older `cpu_s` is
+  never compared with a newer one, and `tools/flea_bench_product.py eligible` refuses such a row.
+  `cpu_tree_s` is `usage_usec` of a control group the run made for this
   entrant, which holds everything it started, sandboxed or reparented, plus a declared helper that
   lives outside it (thunar's `tumblerd`). A TUI row's control group holds its terminal as well, so
   that column includes kitty's own drawing, plus the scope kitty moves the TUI itself into. Before 0.3.2 it summed reaped ticks, which a decode under
@@ -216,6 +225,10 @@ tools/flea-bench
 # Build the media fixture (2,000 files, mixed formats).
 tools/flea-media-fixture
 
+# Every selected entrant must be installed, Strata as two rows: STRATA_BIN (stable) and
+# STRATA_NIGHTLY_BIN (nightly) name both binaries, and a run without them refuses to start.
+export STRATA_BIN=/path/to/strata-stable STRATA_NIGHTLY_BIN=/path/to/strata-nightly
+
 # Run the field bench against the scale fixture: three cold runs per entrant, no thumbnail arm.
 printf '%s\n' "<sudo password>" | tools/flea-field-bench ~/bench/scale.csv
 
@@ -232,12 +245,14 @@ tools/flea-bench-capability
 # cannot close a window it did not start. This is how strata's rows in media-rc-2044.csv were
 # taken, a day after the rest of the field.
 printf '%s\n' "<sudo password>" \
-  | ONLY=strata FIXTURE=/home/flea-sandbox/flea-media-btrfs EXPECT_FILES=2000 DROP_THUMBS=yes \
+  | ONLY="strata-stable strata-nightly" FIXTURE=/home/flea-sandbox/flea-media-btrfs EXPECT_FILES=2000 DROP_THUMBS=yes \
     tools/flea-field-bench ~/bench/strata.csv
 ```
 
 `tools/flea-field-bench` launches the tree it measures, so it is meant to be run from a copy of
-the checkout kept outside the tree under active development; measuring a tree while also editing
+the checkout kept outside the tree under active development (the whole `tools/` directory, since the
+bench sources `flea-sandbox-guard` and runs `flea-bench-keys`, `flea-bench-manifest` and its other
+sibling tools from its own directory); measuring a tree while also editing
 it invites benching a build that does not match the source beside it. The script also checks this
 directly and refuses to run if the release binary is older than the sources that would produce
 it.

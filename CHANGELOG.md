@@ -1,3 +1,123 @@
+# Flea 0.4.1
+
+- The AirDrop plugin, off by default, sends files to nearby Apple devices and accepts incoming files from a notification; it is built on [owly](https://github.com/t4t5/owly/releases/tag/v0.4.0) by @t4t5 and needs a supported Wi-Fi card and the owly package (#369, @netmojo).
+- The file menu shows Properties and Permissions, Show Hidden Files and Hide Code Icons move to the background menu, a customized menu list is kept, and Settings > Menus brings either row back.
+- Relative Path in the Copy As flyout copies paths relative to the listed folder (#296, @root1945).
+- Network's + lists nearby hosts when Settings > Places > List nearby hosts when adding a share is on, off by default (#343, @gdeyoung; #32, @nixfred).
+- Dragging while renaming selects filename text, and a double-click selects a word in every text field (#396, @k-kostin).
+- The > and < keys open or close every marked folder in place, and a folder toggles from its mark without moving the cursor or a flicker (#412, @muellan).
+- The Save chooser names a new folder before it is made (#417, @MrVoicer; #304, @OldJobobo).
+- Save is enabled for the caller's file name when the Save chooser starts in an empty folder (#428, @vitonique).
+- The first window opens faster (#381, @chrispository).
+- 4K HDR video previews play at full frame rate.
+- An idle NVIDIA GPU on a hybrid laptop stays suspended while it drives no display, unless FLEA_VK_KEEP_NVIDIA=1 is set (#376, @neuromante).
+- Trash rows stay drawn while scrolling, on a refresh and when Trash changes (#422, #423, @Loafer19).
+- Columns rows draw at the chosen Row density (#388, @brianblakely).
+- TUI folder sizes survive tab switches, and a folder is walked again only after it changes (#390, @brianblakely).
+- Tab and clicks stay off an empty TUI preview, so q still quits (#389, @brianblakely).
+- Git marks show on rows inside folders opened in place (#411, @muellan).
+- Highlight today's dates takes effect and refreshes at midnight (#427, @muellan; #408, @filip-spaldon).
+- The Flash image row is reachable from the keyboard when Flash opens from a drive, and the image chooser says why it failed (#416, #415, @simonhull).
+- Updating under a Lua-configured Hyprland session closes 0.3.12 windows (#414, @simonhull).
+- One Enter in the Find and Filter lines acts on the highlighted row.
+- A copied file or folder takes its final name only once it is whole, so quitting mid-copy leaves no partial file.
+- LocalSend finds peers, sends and cancels reliably, including large sends and many files.
+- Office document previews finish, large spreadsheets included, by converting the first 30 pages for the preview.
+- The extraction card keeps the item count and bytes in step and shows a time left only when it can be estimated.
+- A Cancel click closes the Compress and Extract password cards and the Settings > Plugins Add and Remove cards.
+- The Compress format chips, the Encrypt checkbox and the Compress and Extract fields answer clicks.
+- Quick Look decodes large PNGs faster and keeps the shown item until the next one is ready instead of fading.
+- A file drag survives a workspace switch in List, Columns and Grid.
+- Switching back to a tab keeps its remembered sort direction.
+- Inactive windows draw a grey list cursor.
+- Each tag keeps its own hue on every theme, so red, orange and yellow tags no longer draw green on Hackerman.
+- A live language switch translates sidebar place names, the Projects row included.
+- When no graphics driver can open a window, Flea names vulkan-swrast in the user's language and lists each refused adapter on stderr.
+- The copy card's spinner is back, held still and dimmed while a job waits.
+- The sign-in fields open when an SMB share lists nothing without credentials.
+- The Grid cursor lands in the same place every time a filter clears.
+- A small Copy As menu shows the half-row cue, and the HTML Source header has its word spacing back.
+- The key sheet and the TUI use one Russian word for Select.
+- The field benchmark reads NVIDIA GPU memory from the driver (#380, @nchudleigh).
+
+Thanks to @brianblakely, @chrispository, @filip-spaldon, @gdeyoung, @k-kostin, @Loafer19, @MrVoicer, @muellan, @nchudleigh, @netmojo, @neuromante, @nixfred, @OldJobobo, @root1945, @simonhull, @t4t5 and @vitonique.
+
+# Flea 0.4.0
+
+- Flea's window is drawn by a new GPU renderer built on GPUI, with every view, card, menu, preview and dialog of 0.3.12 carried over. Machines without a working Vulkan driver fall back to software Vulkan and then OpenGL, and when no renderer can open a window Flea says so and points to flea --tui.
+- Flea follows the system language and includes the 50 languages Omarchy offers, with missing strings falling back to English (#43, @eachann1024).
+- On non-Latin keyboard layouts, digits and letter keys reach their bindings by their position on a US keyboard, while Latin layouts keep the printed key and typed text is unchanged.
+- Theme, font and Window Transparency changes reach an open window at once, and window and card corners follow Hyprland's rounding.
+- Ctrl+G searches the contents of files in the open folder (#252, @passport0819).
+- Name search tolerates typos without listing a near match beside a real hit.
+- Folders expand in place in List view (#113, @muellan).
+- A tab can be dragged into its own window or onto another window, and files drag between panes and windows.
+- A tab change closes the filter, search and Quick Look, and the tab strip exposes its controls to accessibility tools.
+- With Start in set to Last folder, Flea restores tab folders and their order (#353, @dyedfox).
+- X carries selected files to another application without moving the pointer (#57, @jesedv).
+- Open agent here starts Omarchy's agent in the folder being shown (#61, @jesedv).
+- Dragging the window's top bar moves the window, and a user@host:/path location opens as a network share (#32, @nixfred).
+- Text in Markdown, Source and code previews can be selected and copied (#332, @axelfontaine; #358, @avillagran).
+- Clicks used to select text in a JSON preview no longer pass through to the listing (#331, @axelfontaine).
+- Image previews replace the cached thumbnail with an original decoded for the preview frame (#371, @letsfkccp).
+- Quick Look images use the display scale when they are decoded (#336, @gjouret).
+- PDF previews reopen without the image-reader crash reported on 0.3.12 (#347, @FortyTwoFifty).
+- Moving to another video in Quick Look starts a fresh player that plays at once (#364, @jessekalil; #365, @aholbreich).
+- 3D models and toolpaths, including STL, OBJ, PLY, 3MF, STEP and G-code, preview in the preview column and Quick Look.
+- Markdown tables size their columns to their contents.
+- Properties on several items shows their combined size, kinds and counts (#316, @muellan).
+- The filter matches every name in a large folder, and clearing a deep filter restores the listing (#315, @muellan; #318, @itsmunzir; #362, @hegjon).
+- List rows update their hover after a re-read, and each pane keeps its own row details.
+- Folder sizes and size sorting no longer walk into a network or rclone mount (#368, @group6digital).
+- Properties waits for a folder's full size and says unknown when none could be read (#172, @nerdislb).
+- Emptying a large Trash starts as a cancellable job while the window stays responsive (#321, @muellan).
+- Delete on a location without Trash offers permanent deletion (#325, @tko76).
+- Copy and move jobs queue while another transfer is running (#363, @jakovius).
+- Send with rclone uploads a file or folder as a checked job with progress and cancellation (#176, @nerdislb).
+- The extract card shows progress while 7z unpacks (#264, @MISTERNEGATIVE21).
+- Extracting onto an rclone mount falls back to a checked copy when no-replace rename is unsupported (#370, @vitonique).
+- Navigation stays responsive after a rename (#265, @mubshrx).
+- Enter and Open open every selected file with its default application (#288, @murilocb; #350, @OldJobobo).
+- Opening a program on a noexec volume or without its run bit says why it could not run (#330, @jesusalcaladev).
+- Open in terminal uses the selected row's folder and opens Ghostty in a fresh instance (#373, @chrispository).
+- F and B page text, Markdown, PDF and office documents in Quick Look and the preview column (#320, @muellan).
+- Bulk rename buttons take a click and Edit in Terminal is reachable from the keyboard (#305, @muellan).
+- Unlock and bulk rename cards grow with the text size (#310, @OldJobobo).
+- Copy and cut marks line up in List, Columns and Grid (#242, @muellan).
+- The Kind header and cells stay on the right while their divider is dragged (#348 and #349, @felixzsh).
+- A narrow List pane drops optional columns in order, and hidden columns reserve no width (#333, @razmikb; #366, @aholbreich).
+- F4 fits enabled columns even when the window is too narrow to draw them (#375, @aholbreich).
+- A resting pointer does not leave a hover highlight while the keyboard drives the listing (#322, @AyushKr2003).
+- A FUSE folder is read again when the window returns to it (#324, @gjouret).
+- CSV and TSV previews keep quoted headers aligned after a UTF-8 byte-order mark (#355 and #356, @AksharP5).
+- A match late in a long name no longer paints over the next column (#326, @joebaus).
+- The text size keys work with Ctrl alone as well as Ctrl+Shift (#302, @root1945).
+- An .otf font that the system types as an office file previews as a font (#314, @avillagran).
+- The file picker rail lists the same places as the main rail (#205, @akitaonrails).
+- The file picker filters names in Browse and Recent (#297, @NjengaFelix; #312, @pvpmartins; #319, @itsmunzir).
+- A Save dialog can create and enter a folder without leaving the dialog (#304, @OldJobobo).
+- Clicking an existing file in a Save dialog fills Filename and selects its stem (#337, @vitonique; #367, @aholbreich).
+- The file picker accepts path presses and Ctrl+wheel Grid zoom and keeps the requested hidden-file setting (#338, @OldJobobo).
+- The file picker follows the Single Click setting (#372, @jotapesse).
+- A long menu label ends in an ellipsis inside its row (#214, @AksharP5).
+- An internal NTFS volume stays listed with Show unmounted drives off, and an idle HFS+ drive unmounts cleanly (#232, @MiguelDebruyne).
+- The network rail collapses automatic CIFS child mounts of the same share (#374, @EmilsValdmanis).
+- Thumbnailer field codes expand inside options such as --output=%o (#339, @k-kostin).
+- F3D thumbnailers receive expanded options and a bounded 3 GiB address-space allowance (#357, @not-that-nda).
+- Previews release images when selection changes, and a crashed window is not relaunched in a loop (#151, @marvreichmann).
+- Third-party plugins run as separate processes, with settings, menu actions, key bindings and previews drawn by Flea.
+- Plugin startup failures identify the plugin that failed, and PLUGINS.md provides the protocol and working examples.
+- Flea checks for and installs updates through the Omarchy Package Repository.
+- Convert processes selected images as a batch (#269, @muellan).
+- The terminal interface previews office documents and 3D models, searches names and contents, and gains Print and Convert cards.
+- The terminal interface can clear its selection without clearing the filter (#164, @muellan; #317, @itsmunzir).
+- Architecture documentation is split into indexed files so AGENTS.md fits within 32 KiB (#299, @wmfeht).
+- The architecture notes describe the terminal interface that now ships (#198, @johnkattenhorn).
+- The fetch_update warning is suppressed without requiring a newer Rust API (#334 and #335, @paulnunezm).
+- Test and benchmark drivers report missing optional tools before starting (#344 and #345, @gdeyoung).
+
+Thanks to @aholbreich, @akitaonrails, @AksharP5, @avillagran, @axelfontaine, @AyushKr2003, @chrispository, @dyedfox, @eachann1024, @EmilsValdmanis, @felixzsh, @FortyTwoFifty, @gdeyoung, @gjouret, @group6digital, @hegjon, @itsmunzir, @jakovius, @jesedv, @jessekalil, @jesusalcaladev, @joebaus, @johnkattenhorn, @jotapesse, @k-kostin, @letsfkccp, @marvreichmann, @MiguelDebruyne, @MISTERNEGATIVE21, @mubshrx, @muellan, @murilocb, @nerdislb, @nixfred, @NjengaFelix, @not-that-nda, @OldJobobo, @passport0819, @paulnunezm, @pvpmartins, @razmikb, @root1945, @tko76, @vitonique and @wmfeht.
+
 # Flea 0.3.10
 
 - Tags in Omarchy's colours, shared with Dolphin. T tags the selection, 1 to 7 pick a colour, the menus gain a Tags row and flyout, a TAGS section can show in the sidebar (off by default), and search finds files by tag, such as the red tag.

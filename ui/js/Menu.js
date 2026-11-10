@@ -112,6 +112,9 @@ var INVENTORY = [
     ["emptyTrash", "Empty Trash", "trash", "T", "empty"]
 ]
 
+// src/ui_logic_mn1/build.rs BACKGROUND_KEEPS: the background offers these whatever Settings > Menus says.
+var BACKGROUND_KEEPS = ["openTerminal", "toggleHidden", "toggleLangMarks"]
+
 function listingEntries(p) { return buildEntries(p.hasRow ? "F" : "B", p) }
 // The Places rail's own, behind its Extras toggle: off, the rail keeps the menu it has today.
 function placeEntries(p) { return isHidden(p.hiddenActions, "placeMenu") ? [] : buildEntries("P", p) }
@@ -124,10 +127,8 @@ function buildEntries(kind, p) {
         var spec = INVENTORY[i]
         // Rail rows are never user-hideable: no switch governs them, so the stored set is not read here.
         if (spec[3].indexOf(kind) < 0) continue
-        // The background menu shows Open in terminal without reading the hidden set.
-        if (kind !== "R" && isHidden(p.hiddenActions, spec[0])) {
-            if (!(kind === "B" && spec[0] === "openTerminal")) continue
-        }
+        // The background menu keeps these rows without reading the hidden set; there the switches hide them from the file menu alone.
+        if (kind !== "R" && isHidden(p.hiddenActions, spec[0]) && !(kind === "B" && BACKGROUND_KEEPS.indexOf(spec[0]) >= 0)) continue
         var entry = { id: spec[0], action: spec[5] || spec[0], label: spec[1], glyph: spec[2] }
         if (!availableEntry(entry, p, kind)) continue
         if (out.length && group !== spec[4]) out.push({ separator: true })
@@ -229,8 +230,8 @@ function availableEntry(e, p, kind) {
         delete e.glyph
         e.submenu = p.taildropPeers || []
         e.disabled = p.taildropRefreshing === true || !e.submenu.length
-        // The row says it cannot answer by red and one state word, not the reason: a sentence widened the menu past its frame mid-read.
-        if (e.disabled && p.taildropRefreshing !== true) { e.errored = true; e.hint = StateWords.taildrop(p) }
+        // Unavailable app rows read red with no state word, so the menu keeps its size (GM 2026-10-29).
+        if (e.disabled && p.taildropRefreshing !== true) e.errored = true
     }
     // Absent rather than greyed when nothing is installed, the Menu board's rule for a row whose
     // whole destination is missing; the row is a plain send, so it has no submenu and no reason.
@@ -241,13 +242,13 @@ function availableEntry(e, p, kind) {
         delete e.glyph
         e.submenu = p.localSendPeers || []
         e.disabled = p.localSendChecking === true || !e.submenu.length
-        if (e.disabled && p.localSendChecking !== true) { e.errored = true; e.hint = StateWords.localsend(p) }
+        if (e.disabled && p.localSendChecking !== true) e.errored = true
     }
     if (e.action === "dropbox" || e.action === "sharelink") {
         if (!p.dropboxInstalled || (e.action === "dropbox" ? p.rowInDropbox : !p.rowInDropbox)) return false
         e.disabled = p.dropboxRefreshing === true || !p.dropboxPath
         if (e.action === "dropbox") { e.mark = "dropbox"; delete e.glyph }
-        if (e.disabled && p.dropboxRefreshing !== true) { e.errored = true; e.hint = StateWords.dropbox(p) }
+        if (e.disabled && p.dropboxRefreshing !== true) e.errored = true
     }
     if (e.action === "sort") e.submenu = sortEntries(p.hasFolderSort === true)
     // Present only while a check has found a newer build, whose version rides the hint slot beside the status square.
@@ -344,10 +345,11 @@ function canCompare(kinds) {
     return kinds.every(function (kind) { return ((Number(kind) || 0) & Format.S_IFMT) === Format.S_IFREG })
 }
 
-// The Copy as flyout: six leaves in board order, letters on keyHint.
+// The Copy as flyout: seven leaves in board order, letters on keyHint.
 function copyAsEntries() {
     return [
         { id: "copyPath", label: "Path", glyph: "file-text", keyHint: "p" },
+        { id: "copyRelative", label: "Relative path", glyph: "file", keyHint: "r" },
         { id: "copyName", label: "Name", glyph: "type", keyHint: "n" },
         { id: "copyStem", label: "Name without extension", glyph: "type", keyHint: "e" },
         { id: "copydirpath", label: "Folder path", glyph: "folder", keyHint: "f" },
@@ -451,10 +453,9 @@ function applyHidden(entries, hiddenActions) {
     return kept
 }
 
-// Open and the hidden toggle are never in the stored set: ui/js/Settings.js draws them locked, and
-// this is the second half of that lock, so a hand-edited state file cannot empty the menu either.
+// Open is never in the stored set: ui/js/Settings.js draws it locked, and this half of the lock keeps a hand-edited state file from emptying a menu.
 function isHidden(hiddenActions, action) {
-    if (action === "open" || action === "toggleHidden")
+    if (action === "open")
         return false
     for (var i = 0; hiddenActions && i < hiddenActions.length; i++) {
         if (hiddenActions[i] === action)

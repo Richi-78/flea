@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/release-0.3.0-themes.gif" alt="Flea 0.3.0 cycling through ten Omarchy themes, with the iPhone on the Devices rail and a photo in the preview column">
+  <img src="docs/images/release-0.4.0-themes.gif" alt="Flea 0.4.0 cycling through eight dark Omarchy themes at different transparencies, with a photo in the preview column">
 </p>
 
 - **Four views.** List, columns, grid and two panes, with tabs and natural sorting.
@@ -83,7 +83,7 @@ omarchy pkg drop flea
 
 <p align="center">
   <img src="docs/images/grid.png" width="49%" alt="Grid view with image and video thumbnails">
-  <img src="docs/images/list.png" width="49%" alt="Columns view with the preview column, file details and the iPhone on the Devices rail">
+  <img src="docs/images/list.png" width="49%" alt="Columns view with the preview column and file details">
 </p>
 
 **Space** opens Quick Look in any view. Page through a PDF, play media, zoom an image with `+` and
@@ -101,7 +101,7 @@ move, or both to link. Drop files on Trash in the sidebar to trash them, and `z`
 Drag a file into a terminal to paste its path.
 
 <p align="center">
-  <img src="docs/images/shelf.png" width="49%" alt="The shelf card open over Flea, with thumbnails, pins and the last three screenshots">
+  <img src="docs/images/shelf.png" width="49%" alt="The shelf card open over Flea, with thumbnails, pins and the latest recordings">
   <img src="docs/images/iphone.png" width="49%" alt="An iPhone camera roll browsed over AFC, with HEIC thumbnails and a preview">
 </p>
 
@@ -116,115 +116,64 @@ background-alpha = 0.34
 
 ## Performance
 
-**November 2026 · 0.4.0 candidate · measured on Omarchy**
+Measured on 2 November 2026 with the 0.4.0 candidate at `8a7fd82f`, before the final
+release cut. Tables show medians; [full observed ranges, versions and methodology](docs/bench/0.4.0-20261102.md)
+are recorded with the data.
 
-These results use candidate `8a7fd82f`, before the final release cut. Charts show medians
-and observed ranges. [Full data and methodology](docs/bench/0.4.0-20261102.md).
+### 100,000 files
 
-### A folder with 100,000 files
+One folder of empty files on btrfs, three runs per app. Flea and Strata use List;
+the other apps use their installed icon views.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/bench/images/scale-0.4.0-dark.svg">
-  <img src="docs/bench/images/scale-0.4.0-light.svg" alt="Cold first-window and PSS comparison of seven file managers, with median dots and observed-range whiskers">
-</picture>
+| File manager | Version | First window | Settled | PSS | CPU |
+| --- | --- | ---: | ---: | ---: | ---: |
+| **Flea** | 0.4.0 | 319 ms | 0.75 s | 63.0 MiB | 0.53 s |
+| Dolphin | 26.08.2 | 791 ms | 5.25 s | 235.1 MiB | 8.18 s |
+| Nautilus | 51.1.0 | 931 ms | 20.33 s | 337.2 MiB | 21.67 s |
+| Nemo | 6.6.4 | 928 ms | 22.61 s | 479.3 MiB | 26.03 s |
+| PCManFM | 1.4.0 | 479 ms | 35.29 s | 124.4 MiB | 24.25 s |
+| Strata | 1.1.1 | 835 ms | 1.80 s | 159.1 MiB | 1.83 s |
+| Thunar | 4.20.10 | 601 ms | 19.71 s | 394.9 MiB | 19.82 s |
 
-Three runs per arm. Flea and Strata use List; the other apps use their installed icon views.
-Strata is the stable **1.1.1** release. Flea's samples are fresh; unchanged rival results
-were reused after the machine, session, versions and fixture were matched.
-
-<details>
-<summary>Versions, all four metrics and exact ranges</summary>
-
-Values are **median [minimum, maximum]**. One Strata version and view is shown here.
-
-| File manager / version / view | First window (ms) | Settled (ms) | PSS (MiB) | CPU (s) |
-|---|---:|---:|---:|---:|
-| **Flea 0.4.0 candidate / list** | 319 [318, 427] | 753 [751, 860] | 63.01 [62.87, 63.84] | 0.531 [0.512, 0.538] |
-| Dolphin 26.08.2-1 / icons | 791 [788, 795] | 5245 [5074, 5457] | 235.06 [220.27, 236.19] | 8.178 [8.066, 8.439] |
-| Nautilus 51.1-1 / icons | 931 [875, 1042] | 20328 [19782, 21076] | 337.22 [335.91, 338.76] | 21.672 [20.912, 21.908] |
-| Nemo 6.6.4-1 / icons | 928 [904, 954] | 22609 [22170, 22731] | 479.31 [479.00, 480.59] | 26.029 [25.380, 26.213] |
-| PCManFM 1.4.0-2 / icons | 479 [477, 524] | 35293 [33553, 35996] | 124.37 [123.85, 125.72] | 24.250 [23.402, 24.282] |
-| Strata 1.1.1 / list | 835 [814, 904] | 1802 [1785, 1832] | 159.12 [155.70, 161.72] | 1.826 [1.820, 1.894] |
-| Thunar 4.20.10-1 / icons | 601 [555, 628] | 19707 [19642, 19769] | 394.88 [394.80, 395.12] | 19.820 [19.757, 20.043] |
-
-Flea ranks first among the seven tested families for these four metrics on this fixture.
-First window records compositor registration. Settled means 500 ms of process-tree CPU
-quiet; neither establishes that every row was painted or input was ready. CPU includes
-helpers. PSS depends on shared libraries and the session's other applications.
-
-</details>
+Flea's samples are fresh; unchanged rival measurements were reused after matching the
+machine, session, versions and fixture. First window means compositor registration;
+settled means 500 ms of process-tree CPU quiet. Neither measures paint or input readiness.
 
 ### Search across one million files
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/bench/images/search-0.4.0-dark.svg">
-  <img src="docs/bench/images/search-0.4.0-light.svg" alt="First backend result and indexed backend PSS for four search engines, with median dots and observed-range whiskers">
-</picture>
+Thirty measured runs per engine, plus two five-round noise batches.
 
-Thirty measured runs per engine, plus two five-round noise batches. Timing starts at
-`searchopen` and ends at the first nonempty current-generation IPC rows; process creation
-and initial listing are outside the clock. Memory is backend PSS after indexing.
-Mixed typed-first quality still trails nd and fff.
+| Search engine | Version | First result | Backend PSS after indexing |
+| --- | --- | ---: | ---: |
+| **Flea** | 0.4.0 | 166 ms | 75.7 MiB |
+| nd | 0.2.1 | 1617 ms | 145.6 MiB |
+| fff | 0.11.1 | 3172 ms | 221.2 MiB |
+| FSearch | 0.3.0 | 4938 ms | 157.0 MiB |
 
-<details>
-<summary>Engine versions, exact ranges and search quality</summary>
-
-Values are **median [minimum, maximum]**.
-
-| Engine / version | First result (ms) | Indexed backend PSS (MiB) |
-|---|---:|---:|
-| **Flea 0.4.0 candidate** | 165.87 [161.46, 169.59] | 75.65 [74.11, 76.92] |
-| nd v0.2.1 | 1617.36 [1602.04, 1733.15] | 145.65 [145.06, 155.93] |
-| fff 0.11.1-nightly, g7353971 | 3172.12 [3142.71, 3276.40] | 221.24 [174.49, 225.54] |
-| FSearch c20e6b1 | 4937.63 [4879.67, 5045.53] | 157.01 [156.96, 157.11] |
-
-These are backend engine measurements, not GUI-open or paint timings. Search quality is
-separate: Flea and nd placed all five final targets first, while Flea's mixed typed-first
-score of 39.39% trails nd's 48.48% and fff's 56.57%. Full-trace failures for fff and FSearch
-remain in the quality record; the table ranks only the two eligible engine metrics.
-
-</details>
+The clock runs from backend `searchopen` to the first nonempty current-generation IPC rows.
+Process creation and initial listing are outside it. These are backend measurements, not
+GUI-open timings. Flea's mixed typed-first quality still trails nd and fff;
+[the results include those losses](docs/bench/0.4.0-20261102.md#method-and-scope).
 
 ### Compared with 0.3.12
 
-Three interleaved cold runs per build on the same minipc, opening 100,000 empty files.
-The baseline is a frozen copy of the installed 0.3.12 package.
-Values are **median [minimum, maximum]**.
+Three interleaved cold runs per build on the same minipc.
 
-| Metric | Flea 0.4.0 candidate | Flea 0.3.12 |
+| Metric | 0.4.0 | 0.3.12 |
 |---|---:|---:|
-| First window | 348 [343, 434] ms | 525 [522, 538] ms |
-| GUI + backend PSS | 58.63 [57.70, 58.69] MiB | 88.40 [88.27, 88.63] MiB |
-| Resident GPU memory | 83.45 [83.45, 83.45] MiB | 142.68 [142.68, 142.68] MiB |
+| First window | 348 ms | 525 ms |
+| GUI + backend PSS | 58.6 MiB | 88.4 MiB |
+| Resident GPU memory | 83.4 MiB | 142.7 MiB |
 
-First window is Hyprland's window-open event. GUI + backend PSS and resident GPU memory
-are sampled three seconds after mapping. This clock does not measure paint or input readiness.
+The baseline is a frozen copy of the 0.3.12 package. PSS and GPU memory are sampled
+three seconds after mapping.
 
-### Media results
+### Media
 
-Four media comparisons remain **partial or refused**. Flea's observed memory use is higher
-than Thunar's and Nemo's; no complete media ranking is claimed.
-
-<details>
-<summary>Measured values and remaining gaps</summary>
-
-The 2,000-entry btrfs fixture contains 1,800 thumbnailable media files and 200 text controls.
-Flea's completed values below have three valid samples each.
-
-| Flea 0.4.0 candidate | Median [minimum, maximum] |
-|---|---:|
-| First window | 326 [320, 419] ms |
-| Settled | 1544 [1517, 1679] ms |
-| CPU | 4.475 [4.437, 4.693] s |
-
-Flea's memory result is partial: two of three samples qualified, spanning
-160.30 to 168.51 MiB.
-Those observed values are higher than Thunar's 125.41 to 126.29 MiB and Nemo's
-100.14 to 106.53 MiB. PCManFM did not reach an eligible endpoint within 120 seconds;
-Strata's render observer could not establish valid work counts; Nautilus and Dolphin
-lacked helper PSS. These gaps prevent a complete media ranking.
-
-</details>
+The 2,000-entry fixture contains 1,800 thumbnailable media files and 200 text controls.
+Flea's first-window, settled and CPU values have three valid samples. Memory has only
+two, and its observed use is higher than Thunar's and Nemo's. Incomplete measurements
+for the other apps prevent a complete media ranking. [Recorded values and gaps](docs/bench/0.4.0-20261102.md#media).
 
 [Data and provenance](docs/bench/0.4.0-20261102.md) · [Method](docs/benchmarks.md) ·
 [Historical results](docs/bench/local-0.3.10-20261012.manifest.md)
@@ -255,20 +204,35 @@ Press **?** for the full keymap, or **,** to change settings.
 The Windows preset uses `Ctrl+Shift+1/2/3/4` for views and `Ctrl+Y` for redo.
 See [the full key table](keys.toml) for preset bindings and pointer actions.
 
+## Scripts and agents
+
+Every Flea window is titled Flea. To find which folder each one shows, ask it over IPC by its process id:
+
+```sh
+for p in $(hyprctl clients -j | jq -r '.[] | select(.class == "com.thisisgm.flea") | .pid'); do
+    echo "$p $(flea ipc --pid "$p" call flea path)"
+done
+```
+
+To open a folder and know when a window shows it, run `flea /path/to/folder`, then poll
+`flea ipc --pid PID call flea path` until it prints that path.
+
 ## Build
 
-Requires Omarchy, Quickshell 0.3.1 or newer, and Rust. See
+Requires Omarchy and Rust. See
 [installation details](docs/install.md) for runtime and optional dependencies.
 
 ```bash
-cargo build --release
-FLEA_UI="$PWD/ui" ./target/release/flea --gui
+cargo build --locked --release --workspace
+./target/release/flea --gui
 ```
 
 Pass a directory to open it, or `--select <path>` to reveal a file.
 
 `./tests/run-all.sh` runs the headless suites, and [the protocol guide](docs/protocol.md) documents
 the backend.
+
+See [PLUGINS.md](PLUGINS.md) to write, validate, install and debug a Flea plugin, with a working example for each kind.
 
 ## Support
 
@@ -279,6 +243,9 @@ If this saved you an afternoon, you can
 ## Licence
 
 [MIT](LICENSE).
+
+The AirDrop plugin is built on [owly](https://github.com/t4t5/owly) by Tristan
+([t4t5](https://github.com/t4t5)), MIT, which Flea runs as a separate program.
 
 The language marks in `ui/js/LangMarkPaths.js` use [simple-icons](https://github.com/simple-icons/simple-icons)
 geometry (CC0 1.0) and remain their owners' trademarks.

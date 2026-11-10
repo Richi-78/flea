@@ -15,7 +15,7 @@ impl Rig {
     fn open(d: &TestDir, wish: usize) -> Rig {
         let root = d.path().to_str().expect("the sandbox path is utf-8").to_string();
         let tb = Tables::load();
-        let (events, _events_rx) = channel();
+        let (events, _events_rx) = crate::backend::events::channel();
         let mut st = State::new(crate::backend::dirsizeworker::Worker::new(events));
         let (results, _done) = channel();
         let pool = Pool::new(1, results, d.join("cache"), Arc::clone(&tb.aliases), Arc::clone(&tb.thumbs));
@@ -189,4 +189,45 @@ fn a_window_past_the_head_fills_its_own_folder_rows() {
     let mut keys: Vec<usize> = rig.st.dirsizes.keys().copied().collect();
     keys.sort();
     assert_eq!(keys, vec![deep], "a window starting at a later row fills that row, not the head's");
+}
+
+// A short answer's arena is sized to its rows, under glibc's 128 KiB mmap threshold, so the answer maps no 1 MiB block.
+#[test]
+fn answer_listing_is_sized_to_its_rows() {
+    let d = fixture("answersizes-arena");
+    let mut rig = Rig::open(&d, 40);
+    rig.ask("bench");
+    assert!(rig.st.listing.len() >= 3, "{}", rig.st.listing.len());
+    assert!(rig.st.listing.names.capacity() < 4096, "names capacity {}", rig.st.listing.names.capacity());
+    assert!(rig.st.listing.spans.capacity() < 64, "spans capacity {}", rig.st.listing.spans.capacity());
+}
+
+// Issue 390: a size the settled cache answers teaches the session, as a walked one does.
+#[test]
+fn a_settled_size_the_client_asked_for_teaches_the_session() {
+    let d = fixture("answersizes-settled");
+    let mut rig = Rig::open(&d, 40);
+    *rig.sizes() = AnswerSizes::new(true);
+    rig.sizes().wish = 40;
+    rig.ask("bench");
+    let row = (0..rig.st.listing.len())
+        .find(|&row| rig.st.listing.name(row) == "bench-a")
+        .expect("bench-a is listed");
+    let path = rig.st.base.join("bench-a");
+    let watch = crate::backend::dirsizewatch::TreeWatch::new();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let (size, pins) =
+        crate::backend::dirsizewatch::walk_watched(&path, deadline, &|| false, &watch);
+    rig.st.settled.settle(path, size.bytes, pins);
+    rig.st.dirsizes.remove(&row);
+    let mut out = Vec::new();
+    crate::backend::dirsizereq::queue_dirsizes(&mut out, &mut rig.st, &[row]);
+    assert!(!out.is_empty(), "the settled size answers at once");
+    let (rows, walks) = rig.ask("ben");
+    assert_eq!(walks, 0, "a remote scope walks nothing inline");
+    let pair = format!(",{}]", size.bytes);
+    assert!(
+        rows.contains(&pair),
+        "the settled size rides on the next answer: {rows}"
+    );
 }
