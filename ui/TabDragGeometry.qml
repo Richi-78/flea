@@ -2,10 +2,12 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Wayland window positions are not QWindow positions. Match the one source client
-// by pid using Theme's hyprctl Process pattern, once per lift, never on motion.
+// Wayland window positions are not QWindow positions. Hyprland can answer with
+// hyprctl; niri exposes no reliable global geometry, so tear-off is unavailable
+// there and `rect` stays null (in-window tab reordering still works).
 Item {
     id: root
+    readonly property bool available: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== null
     property string token: ""
     property string queryToken: ""
     property bool queryDrained: true
@@ -16,6 +18,8 @@ Item {
         root.token = lift
         root.rect = null
         root.strip = band
+        if (!root.available)
+            return
         // An old query drains before the latest token starts its own query.
         if (query.running || !root.queryDrained)
             return
@@ -26,6 +30,8 @@ Item {
 
     // Exit must clear running and drain old stdout before the next token starts.
     function restartLatest() {
+        if (!root.available)
+            return
         if (!query.running && root.queryDrained && root.queryToken !== root.token) root.begin(root.token, root.strip)
     }
 

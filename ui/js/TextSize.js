@@ -10,8 +10,8 @@
 
 // Whole sentences with "%1" for a value, filled by fill so each translates as one.
 var WORDS = {
-    followsOmarchy: "Text size follows Omarchy, %1",
-    override: "Text size %1. %2 follows Omarchy again",
+    followsOmarchy: "Text size follows the desktop, %1",
+    override: "Text size %1. %2 follows the desktop again",
     overrideAlone: "Text size %1"
 }
 
@@ -33,7 +33,7 @@ function follow() {
     return { mode: FOLLOW }
 }
 
-// Follow Omarchy is the default, and the board names its stored shape: {"mode":"system"}. An
+// Follow System is the default, and the board names its stored shape: {"mode":"system"}. An
 // override is the same key holding a number instead, which is src/uischema.rs's own display.textSize
 // rule: "system", or one stop the OEM panel could have produced. There is no second stored shape.
 function following(stored) {

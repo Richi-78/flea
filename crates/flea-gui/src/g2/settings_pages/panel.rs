@@ -127,14 +127,26 @@ impl Panel {
         };
         let checks = pages::at(data, &["updates", "autoCheck"]).and_then(Json::as_bool);
         // Plugins rows are the plugin unit's, handed in through its own seam; none are registered yet.
-        pages::rows(section, &state, Vec::new(), || {
+        let mut rows = pages::rows(section, &state, Vec::new(), || {
             about::rows(
                 &self.facts.about,
                 about::auto_check(checks),
                 &self.facts.language,
                 self.make_default.clone(),
             )
-        })
+        });
+        if section == "about" {
+            if let Some(language) = rows.iter_mut().find(|row| row.id == "language") {
+                language.kind = Kind::Choice;
+                language.values = self.catalog.roster().iter().map(|locale| locale.code.clone()).collect();
+                language.labels = self.catalog.roster().iter().map(|locale| Text::data(locale.name.clone())).collect();
+                language.selected = self.catalog.language().to_owned();
+                language.value = Text::data(self.catalog.roster().iter()
+                    .find(|locale| locale.code == language.selected)
+                    .map(|locale| locale.name.clone()).unwrap_or_else(|| "English".into()));
+            }
+        }
+        rows
     }
 
     /// Rows come from the document, so every write or catalog change rebuilds the pane and any standing search.

@@ -1,5 +1,6 @@
 use crate::prefetch;
 use std::ffi::OsStr;
+use std::fs::{self, OpenOptions};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -7,6 +8,30 @@ use std::process::{Command, Stdio};
 mod launch;
 pub use launch::{exec_gpui, exec_gpui_unlock};
 pub(crate) use launch::reject_legacy_frontend;
+
+// Establish the watched marker before GPUI/QML reads the theme paths. Noctalia may
+// replace colors.toml atomically, so the stable marker is the file to watch.
+pub(crate) fn ensure_theme_state() -> std::io::Result<()> {
+    let state = std::env::var_os("FLEA_THEME_DIR")
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            let state_home = std::env::var_os("XDG_STATE_HOME")
+                .filter(|value| !value.is_empty())
+                .map(std::path::PathBuf::from)
+                .or_else(|| std::env::var_os("HOME").filter(|value| !value.is_empty())
+                    .map(|home| std::path::PathBuf::from(home).join(".local/state")))?;
+            Some(state_home.join("flea"))
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from(".local/state/flea"));
+    fs::create_dir_all(state.join("theme"))?;
+    OpenOptions::new().create(true).append(true).open(state.join("theme.name"))?;
+    let shell = state.join("theme/shell.toml");
+    if !shell.exists() {
+        fs::write(shell, "[font]\nbase-size = 14\n")?;
+    }
+    Ok(())
+}
 
 // std already links libc, so fork is declared here rather than taking a crate.
 extern "C" {

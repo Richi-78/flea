@@ -1,7 +1,6 @@
 pragma Singleton
 
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import QtQuick
 import qs.Commons
@@ -17,7 +16,13 @@ import "js/TextSize.js" as TextSize
 Singleton {
     id: root
 
-    readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/omarchy/current"
+    // Noctalia writes the palette here; FLEA_THEME_DIR is the state root that
+    // holds theme/ and theme.name, not the theme/ subdirectory itself.
+    readonly property string stateHome: Quickshell.env("XDG_STATE_HOME")
+        || (Quickshell.env("HOME") + "/.local/state")
+    readonly property string themeRoot: Quickshell.env("FLEA_THEME_DIR")
+        || (root.stateHome + "/flea")
+    readonly property string stateDir: root.themeRoot + "/theme"
 
     // The parsed colors.toml, for the code inks CodeLines lifts.
     property var palette: ({})
@@ -32,7 +37,7 @@ Singleton {
     readonly property real sizeRatio: Style.font.baseSize > 0 ? root.baseSize / Style.font.baseSize : 1
 
     // The compositor's own monitor scale, which the Display section shows and never steps; 0 until
-    // hyprctl has answered, and the panel says so rather than claiming a number it does not have.
+    // niri has answered, and the panel says so rather than claiming a number it does not have.
     property real monitorScale: 0
 
     // A property and not a Motion.js var: a plain library var notifies nothing, so every Behavior
@@ -123,7 +128,7 @@ Singleton {
         readonly property int nameMin: Math.round(root.nameMinChars * glyphMetrics.advanceWidth)
     }
 
-    // Row height follows the font so it scales with omarchy display text size.
+    // Row height follows the font so it scales with the desktop text size.
     readonly property int rowHeight: Math.round(font.bodySmall * lineBoxRatio) + 2 * spacing.rowPaddingY
     readonly property int fileRowHeight: Density.rowHeight(Math.round(font.bodySmall * lineBoxRatio), spacing.rowPaddingY, ViewState.density)
     // The icon slot is the row's text line box, so an icon can never change the row height.
@@ -357,22 +362,16 @@ Singleton {
         root.ready = Palette.isPalette(found);
     }
 
-    // Sample input: [{"id":0,"name":"DP-1","width":2560,"height":1440,"scale":1.00,"focused":true}]
+    // Sample input, niri 26.04:
+    // {"name":"DP-3","logical":{"x":0,"y":0,"width":2560,"height":1440,"scale":1.5}}
     function applyMonitorScale(body) {
         try {
-            var monitors = JSON.parse(body);
-            for (var i = 0; i < monitors.length; i++) {
-                if (monitors[i].focused === true)
-                    root.monitorScale = monitors[i].scale;
-            }
+            var out = JSON.parse(body);
+            if (out.logical && isFinite(out.logical.scale))
+                root.monitorScale = out.logical.scale;
         } catch (e) {
-            // hyprctl unreachable, or a shape this build does not know: the row keeps saying so.
+            // niri unreachable, or a shape this build does not know: the row keeps saying so.
         }
-    }
-
-    // Sample input: {"option": "animations:enabled", "bool": false, "set": true }
-    function applyReducedMotion(body) {
-        root.reducedMotion = String(body).indexOf('"bool": false') >= 0;
     }
 
     // blockLoading only gates calls to text()/data(), so a window could paint one frame against the
@@ -380,7 +379,7 @@ Singleton {
     // construction before any window, and the later onLoaded is a harmless idempotent second apply.
     FileView {
         id: colorsFile
-        path: root.stateDir + "/theme/colors.toml"
+        path: root.stateDir + "/colors.toml"
         blockLoading: true
         printErrors: false
         onLoaded: root.applyColors(text())
@@ -391,19 +390,19 @@ Singleton {
     // Color.loadShell refreshes Style's whole token scale, so the type ladder flips with the theme.
     FileView {
         id: shellFile
-        path: root.stateDir + "/theme/shell.toml"
+        path: root.stateDir + "/shell.toml"
         blockLoading: true
         printErrors: false
         onLoaded: Commons.Color.loadShell(text())
         onLoadFailed: Commons.Color.loadShell("")
     }
 
-    // omarchy-theme-set rm -rf's and mv's the theme directory, so an inotify watch on a file inside
-    // it dies with the old inode and never fires again. theme.name is rewritten in place after the
-    // swap, which makes it the one event that survives, measured across three consecutive switches.
+    // Noctalia replaces the theme directory atomically, so an inotify watch on a file inside it dies
+    // with the old inode. theme.name is touched in place by the template's post_hook after the swap,
+    // which makes it the one event that survives.
     FileView {
         id: themeNameFile
-        path: root.stateDir + "/theme.name"
+        path: root.themeRoot + "/theme.name"
         blockLoading: true
         watchChanges: true
         printErrors: false
@@ -411,12 +410,12 @@ Singleton {
             reload();
             colorsFile.reload();
             shellFile.reload();
-            // The OEM shell's applyTheme runs this beside the two reloads above, and without it a theme that moves decoration:rounding leaves every corner here on the old value.
+            // Harmless under niri: Style.refresh() keeps its own corner default.
             Style.scheduleRefresh();
         }
     }
 
-    // Hyprland reloads its config for a Window Corners, Gaps or Transparency change with no theme switch, so Style's rounding and Glass's mode are read again then.
+    // Kept for Glass and the Omarchy-era test harnesses. niri emits neither event, so Glass stays opaque.
     signal configReloaded()
     signal fleaWindowOpened()
     // Sample input, openwindow's data: "55bacb0a1f80,1,com.thisisgm.flea,Flea", the class third.
@@ -426,35 +425,17 @@ Singleton {
         Style.scheduleRefresh();
         root.configReloaded();
     }
-    // The Hyprland singleton is only touched inside Hyprland, so a headless run has no socket to join.
-    Connections {
-        target: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== null ? Hyprland : null
-        function onRawEvent(event) { root.hyprEvent(event.name, event.data) }
-    }
-
     // Read once, not watched: the Display section reports the compositor's scale and Flea owns no
     // control that could change it, so there is nothing here for a poll to keep in step with.
+    // niri has no animations query either; FLEA_REDUCED_MOTION is the only switch.
     Process {
         running: true
-        command: ["hyprctl", "monitors", "-j"]
+        command: ["niri", "msg", "--json", "focused-output"]
         stdout: StdioCollector {
             waitForEnd: true
             // text is a property on this type and not a function, which every other collector in
             // this tree already reads that way; calling it throws and the row stays unanswered.
             onStreamFinished: root.applyMonitorScale(text)
-        }
-    }
-
-    // Flea agrees with the compositor rather than carrying a switch, and FLEA_REDUCED_MOTION is the
-    // test override; Quickshell.env answers null for an unset variable, so the guard is a truthiness
-    // test, StdioCollector text is a property whose call throws, and the query is Style.qml's own.
-    Process {
-        id: motionQuery
-        running: !Quickshell.env("FLEA_REDUCED_MOTION")
-        command: ["hyprctl", "-j", "getoption", "animations:enabled"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.applyReducedMotion(text)
         }
     }
 }

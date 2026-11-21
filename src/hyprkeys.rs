@@ -22,6 +22,9 @@ const BINDS: [(&str, &str, &str); 2] = [
 const MODMASKS: [u32; 2] = [65, 73];
 
 pub fn claim() -> Result<String, String> {
+    if niri_session() {
+        return Ok("keys: niri does not allow Flea to edit key bindings. Add `Mod+E hotkey-overlay-title=\"File Manager: Flea\" { spawn \"flea\" \"--gui\"; }` to your niri keybinds.".to_string());
+    }
     let path = bindings_path()?;
     let text = read(&path)?;
     if has_block(&text) {
@@ -49,6 +52,9 @@ pub fn claim() -> Result<String, String> {
 }
 
 pub fn release() -> Result<String, String> {
+    if niri_session() {
+        return Ok("keys: no niri configuration was changed; remove the Flea keybind from your niri config by hand if you added it.".to_string());
+    }
     let path = bindings_path()?;
     let text = read(&path)?;
     let Some(without) = without_block(&text)? else {
@@ -68,6 +74,9 @@ pub fn release() -> Result<String, String> {
 // prompts belong in the floating treatment, and its own tag rules then float, centre and size them.
 // A chooser is that same kind of window, so this asks for the same tag rather than inventing a size.
 pub fn float_claim() -> Result<String, String> {
+    if niri_session() {
+        return Ok("window: niri does not allow Flea to edit window rules. Add `window-rule { match app-id=\"com.thisisgm.flea.picker\" open-floating true }` to your niri rules.".to_string());
+    }
     let path = bindings_path()?;
     let text = read(&path)?;
     if begin_at(&text, FLOAT_BEGIN).is_some() {
@@ -93,6 +102,9 @@ pub fn float_claim() -> Result<String, String> {
 }
 
 pub fn float_release() -> Result<String, String> {
+    if niri_session() {
+        return Ok("window: no niri window rule was changed; remove the Flea picker rule by hand if you added it.".to_string());
+    }
     let path = bindings_path()?;
     let text = read(&path)?;
     let Some(without) = cut(&text, FLOAT_BEGIN, FLOAT_END)? else {
@@ -105,6 +117,10 @@ pub fn float_release() -> Result<String, String> {
 
 pub fn float_block() -> String {
     format!("\n{}\no.window(\"{}\", {{ tag = \"+floating-window\" }})\n{}\n", FLOAT_BEGIN, PICKER_APP_ID, FLOAT_END)
+}
+
+fn niri_session() -> bool {
+    std::env::var_os("NIRI_SOCKET").is_some_and(|value| !value.is_empty())
 }
 
 fn bindings_path() -> Result<PathBuf, String> {

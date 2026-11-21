@@ -198,8 +198,8 @@ function displayRows(state) {
     var out = [
         { kind: "group", label: "Text size" },
         { kind: "choice", id: "textMode", label: "Text size", glyph: "type",
-          labels: ["Follow Omarchy", "Override"],
-          value: follows ? "Follow Omarchy" : "Override" },
+          labels: ["Follow System", "Override"],
+          value: follows ? "Follow System" : "Override" },
         // The board's seven-stop ruler, the override's own control, now carrying the numbers it stands for; a size Omarchy invented that is not a stop marks the nearest one.
         { kind: "ruler", id: "textStop", stops: TextSize.STOPS, on: !follows,
           index: TextSize.STOPS.indexOf(TextSize.nearest(state.baseSize)) }
@@ -214,9 +214,9 @@ function displayRows(state) {
     out.push({ kind: "fact", label: "Scale", glyph: "maximize",
                value: scaleLabel(state.monitorScale) })
     out.push({ kind: "hint",
-               label: "Flea follows Hyprland's scale and does not change it." })
+               label: "Flea follows niri's scale and does not change it." })
     out.push({ kind: "group", label: "Appearance" })
-    out.push({ kind: "check", id: "display.hyprlandIcons", label: "Hyprland-aware icons",
+    out.push({ kind: "check", id: "display.hyprlandIcons", label: "Rounded icons",
                mark: MARKS["display.hyprlandIcons"],
                on: ((state.data || {}).display || {}).hyprlandIcons === true })
     return out

@@ -101,6 +101,9 @@ fn binary_usable(binary: &Path) -> std::io::Result<()> {
 
 fn exec_window(start: Option<&str>, select: Option<&str>, special: Option<(&str, &str)>) -> i32 {
     if reject_legacy_frontend() { return 2; }
+    if let Err(error) = crate::gui::ensure_theme_state() {
+        eprintln!("flea: could not initialize theme state: {error}");
+    }
     let executable = std::env::current_exe().ok();
     let binary = gpui_binary(executable.as_deref(), |path| path.is_file());
     if let Err(error) = binary_usable(&binary) {
@@ -205,6 +208,9 @@ fn gpui_pick_argv(binary: &Path, reply: &str) -> Command {
 // flea --pick under the GPUI frontend: FLEA_PICKER rides the environment, the reply path the argument.
 pub(super) fn exec_gpui_pick(reply: &str) -> i32 {
     if reject_legacy_frontend() { return 2; }
+    if let Err(error) = crate::gui::ensure_theme_state() {
+        eprintln!("flea: could not initialize theme state: {error}");
+    }
     if !crate::paths::has_display() {
         eprintln!("flea: there is no graphical session to open a file chooser in");
         return 2;

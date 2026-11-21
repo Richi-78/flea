@@ -1,17 +1,14 @@
-// flea --update: ask the source that installs this Flea for a newer one, and hand installing to Omarchy.
-use crate::terminal;
+// flea --update: ask the source that installs this Flea for a newer one. The niri fork is a
+// local makepkg package, so installing is a rebuild from the checkout rather than an updater.
 use std::cmp::Ordering;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 // The exit statuses of `flea --update check`; the printed line carries the detail.
 pub const AVAILABLE: i32 = 0;
 pub const FAILED: i32 = 2;
 pub const NOTHING_TO_INSTALL: i32 = 3;
 
-// Omarchy's own menu command for its updater, handed over as a fixed argv and never through a shell.
-const UPDATER: &str = "omarchy-update";
-
-// The signed package Omarchy installs from its repository.
+// The signed package an Omarchy repository would install; kept so an old checkout still reads.
 const OPR_PACKAGE: &str = "flea";
 
 // The prebuilt release binary's package, which `omarchy update` upgrades or moves to OPR's `flea`.
@@ -95,17 +92,11 @@ pub fn check() -> i32 {
     report.status()
 }
 
-// flea --update: Omarchy's updater in its own floating terminal, the command its menu and its bar run.
+// flea --update: this fork is installed locally with makepkg, so there is no updater to launch.
+// Print the rebuild instruction and leave the machine alone.
 pub fn launch() -> i32 {
-    let mut presenter = Command::new("omarchy-launch-floating-terminal-with-presentation");
-    terminal::detach(&mut presenter);
-    match presenter.arg(UPDATER).spawn() {
-        Ok(_) => 0,
-        Err(_) => {
-            eprintln!("flea: Omarchy's updater could not be started, so nothing was updated");
-            FAILED
-        }
-    }
+    eprintln!("flea: local package: rebuild with `makepkg -si` from the checkout to update");
+    NOTHING_TO_INSTALL
 }
 
 fn investigate() -> Report {

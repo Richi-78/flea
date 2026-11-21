@@ -49,12 +49,16 @@ impl Sources {
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local/state"));
-        let theme = home.join(".local/state/omarchy/current/theme");
+        let theme = std::env::var_os("FLEA_THEME_DIR")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| state.join("flea"))
+            .join("theme");
         Self {
             inputs: [
                 theme.join("colors.toml"),
                 theme.join("shell.toml"),
-                home.join(".config/omarchy/shell.toml"),
+                config.join("flea/shell.toml"), 
                 config.join("fontconfig/fonts.conf"),
                 config.join("fontconfig/conf.d/50-omarchy-input-method.conf"),
                 state.join("omarchy/toggles/hypr/window-opaque.lua"),

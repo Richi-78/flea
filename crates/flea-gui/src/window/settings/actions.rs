@@ -96,13 +96,8 @@ impl Shell {
     ) {
         if id == "viewDual" {
             self.choose_settings_view(View::Dual, window, cx);
-        } else if id == "language" {
-            self.launch_settings_program(
-                "omarchy-menu",
-                vec!["summon".into(), "setup.language".into()],
-                window,
-                cx,
-            );
+        } else if let Some(code) = id.strip_prefix("language:") {
+            self.write_language_choice(code, cx);
         } else if id == "updateFlea" {
             self.settings_update(true, window, cx);
         } else if matches!(
@@ -185,6 +180,42 @@ impl Shell {
                 self.dispatch(Order::Action(event), window, cx);
             }
         }
+    }
+
+    fn write_language_choice(&mut self, code: &str, cx: &mut Context<Self>) {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").filter(|value| !value.is_empty())
+                .map(|home| std::path::PathBuf::from(home).join(".config")));
+        let Some(path) = config.map(|root| root.join("flea/language")) else {
+            if let Some(host) = &mut self.panes[self.focus_side] {
+                host.status = "Cannot locate the Flea configuration directory.".into();
+                cx.notify();
+            }
+            return;
+        };
+        if !self.locale.catalog.roster().iter().any(|locale| locale.code == code) {
+            return;
+        }
+        let result = (|| {
+            let parent = path.parent().ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+            std::fs::create_dir_all(parent)?;
+            let temporary = path.with_extension(format!("language-{}.tmp", std::process::id()));
+            std::fs::write(&temporary, format!("{code}\n"))?;
+            std::fs::rename(temporary, &path)
+        })();
+        if let Err(error) = result {
+            if let Some(host) = &mut self.panes[self.focus_side] {
+                host.status = format!("Could not prepare language selection: {error}").into();
+                cx.notify();
+            }
+            return;
+        }
+        if let Some(host) = &mut self.panes[self.focus_side] {
+            host.status = format!("Language set to {code}; reloading translations…").into();
+        }
+        cx.notify();
     }
 
     fn launch_settings_program(

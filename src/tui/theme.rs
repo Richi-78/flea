@@ -119,8 +119,18 @@ pub struct Theme {
 }
 impl Theme {
     pub fn path() -> std::path::PathBuf {
-        std::env::var_os("HOME").filter(|s| !s.is_empty()).map(std::path::PathBuf::from)
-            .map(|home| home.join(".local/state/omarchy/current/theme/colors.toml")).unwrap_or_default()
+        let root = std::env::var_os("FLEA_THEME_DIR")
+            .filter(|value| !value.is_empty())
+            .map(std::path::PathBuf::from)
+            .or_else(|| {
+                let state = std::env::var_os("XDG_STATE_HOME")
+                    .filter(|value| !value.is_empty())
+                    .map(std::path::PathBuf::from)
+                    .or_else(|| std::env::var_os("HOME").filter(|value| !value.is_empty())
+                        .map(|home| std::path::PathBuf::from(home).join(".local/state")))?;
+                Some(state.join("flea"))
+            });
+        root.map(|root| root.join("theme/colors.toml")).unwrap_or_default()
     }
     #[cfg(test)]
     pub fn load() -> Self { Self::from_text(&read(&Self::path()).unwrap_or_default()) }

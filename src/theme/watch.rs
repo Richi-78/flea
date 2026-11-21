@@ -16,15 +16,15 @@ pub struct ThemePaths {
 impl ThemePaths {
     // Commons uses HOME for theme/font paths; only Glass's toggle directory follows XDG_STATE_HOME.
     pub fn for_home(home: &Path, state_home: Option<&Path>) -> Self {
+        let state = state_home
+            .map(Path::to_owned)
+            .unwrap_or_else(|| home.join(".local/state"));
         Self {
-            current: home.join(".local/state/omarchy/current"),
-            user_shell: home.join(".config/omarchy/shell.toml"),
+            current: state.join("flea"),
+            user_shell: home.join(".config/flea/shell.toml"),
             fontconfig: home.join(".config/fontconfig/fonts.conf"),
             hypr_config: home.join(".config/hypr"),
-            toggles: state_home
-                .map(Path::to_owned)
-                .unwrap_or_else(|| home.join(".local/state"))
-                .join("omarchy/toggles/hypr"),
+            toggles: state.join("flea/toggles"),
         }
     }
 

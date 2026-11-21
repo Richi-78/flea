@@ -893,7 +893,7 @@
   "settings.update.note_release": "Omarchy update installs newer releases.",
   "settings.update.opening": "Opening Omarchy update · restart Flea when it finishes",
   "settings.update.launch_failed": "Omarchy's updater could not be started.",
-  "settings.about.tagline": "A file manager for Omarchy",
+  "settings.about.tagline": "A file manager for niri",
   "settings.about.version": "Version",
   "settings.about.built": "Built",
   "settings.about.installed_from": "Installed from",

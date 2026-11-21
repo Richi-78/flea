@@ -1,0 +1,43 @@
+Omarchy shell modules, vendored for the niri port
+=================================================
+
+These files come from the Omarchy shell (https://github.com/omacom/omarchy,
+branch `quattro`, path `shell/Commons` and `shell/Ui`). Omarchy is MIT
+licensed; see LICENSE beside this notice.
+
+Flea vendors only the modules its QML imports, instead of symlinking
+`/usr/share/omarchy/shell`:
+
+  Commons/Color.qml
+  Commons/Style.qml
+  Commons/Util.qml
+  Commons/Border.qml
+  Commons/BorderGeometry.js
+  Commons/qmldir
+  Ui/BorderSurface.qml
+  Ui/BorderOverlay.qml
+  Ui/PanelSectionHeader.qml
+  Ui/PanelSeparator.qml
+  Ui/qmldir
+
+The qmldir files list only the vendored entries, so an undeclared Omarchy
+type cannot be resolved by accident.
+
+Local patches, kept minimal so a future rebase is a diff and not a rewrite:
+
+  Commons/Color.qml
+    - `currentThemePath` reads `$XDG_STATE_HOME/flea/theme`, with
+      `FLEA_THEME_DIR` as an override, instead of the Omarchy state path.
+    - `userShellFile` reads `~/.config/flea/shell.toml`, not
+      `~/.config/omarchy/shell.toml`.
+    - `loadColors` honours an explicit `urgent` key before falling back to
+      `red`/`color1`, so Noctalia's `colors.error` is the urgent colour.
+
+  Commons/Style.qml
+    - `cornerRadius` defaults to 10 (or `FLEA_CORNER_RADIUS`) under niri,
+      where `hyprctl` cannot answer.
+    - `refresh()` only queries `hyprctl` when a Hyprland instance exists.
+    - The `Quickshell.Hyprland` import and the config-reload connection are
+      removed; niri has no equivalent event and Flea keeps the niri default.
+
+Everything else is unmodified Omarchy code.

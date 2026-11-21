@@ -25,7 +25,7 @@ const FOREGROUND: [u8; 3] = [0xc6, 0xb3, 0x95];
 // The theme's own fallback pair, what a TUI that read no colors.toml draws: the EY-284 capture's stage and parts.
 const FALLBACK_GROUND: [u8; 3] = [0x10, 0x13, 0x15];
 const FALLBACK_FOREGROUND: [u8; 3] = [0xca, 0xcc, 0xcc];
-const THEME_FILE: &str = ".local/state/omarchy/current/theme/colors.toml";
+const THEME_FILE: &str = ".local/state/flea/theme/colors.toml";
 const THEME_WAIT: Duration = Duration::from_secs(5);
 // A foreground no theme above shares, so only faces drawn in the role ink change under it.
 const PROBE_FOREGROUND: [f32; 3] = [0., 0., 1.];

@@ -51,11 +51,11 @@ function runRows(check) {
     // The board's Display card: the text-size mode over its effective size, then the compositor's two read-only facts. No monitor-scale control, because Flea does not step or cycle that one.
     check("the Display section is text size, then Scale, then Appearance",
           kinds(display), "group|choice|ruler|hint|fact|group|fact|hint|group|check")
-    check("its one control opens on Follow Omarchy", find(display, "textMode").value,
-          "Follow Omarchy")
+    check("its one control opens on Follow System", find(display, "textMode").value,
+          "Follow System")
     // The board draws the mode as both names side by side, so the row names them rather than leaving ui/SettingsRow.qml to invent a second list that could disagree with the writer.
     check("and it names both its values, in the board's own order",
-          find(display, "textMode").labels.join("|"), "Follow Omarchy|Override")
+          find(display, "textMode").labels.join("|"), "Follow System|Override")
     // SettingsRest rule 2: the ruler carries the seven numbers, so it states the stop it marks and the hint keeps only the chords.
     check("the ruler stands for the stops themselves", display[2].stops.join(","), "9,10,11,12,14,16,20")
     check("and marks the one in force, five of the seven", display[2].index, 4)
@@ -77,7 +77,7 @@ function runRows(check) {
     check("and an unanswered query says so rather than claiming 1x",
           Settings.rows("display", displayState(TextSize.follow(), 14, 0))[6].value, "not reported")
     check("its hint is the board's own sentence, so no reader expects a control",
-          display[7].label, "Flea follows Hyprland's scale and does not change it.")
+          display[7].label, "Flea follows niri's scale and does not change it.")
     check("the board icon override defaults off", display[9].id + "|" + display[9].on, "display.hyprlandIcons|false")
 
     // Switching to Override adds the stop row, and nothing else about the section moves.

@@ -42,11 +42,30 @@ fn language_code(text: &str) -> &str {
     text.lines().next().unwrap_or("").trim()
 }
 
+// Prefer the standard locale precedence and reduce POSIX locale spellings (it_IT.UTF-8) to the
+// roster's BCP-47 form (it-IT); I18n::reload then falls back to the primary language if needed.
+fn system_language() -> String {
+    ["LC_ALL", "LC_MESSAGES", "LANG"].into_iter()
+        .filter_map(std::env::var_os)
+        .map(|value| value.to_string_lossy().into_owned())
+        .find(|value| !value.is_empty() && value != "C" && value != "POSIX")
+        .map(|value| {
+            let value = value.split(['.', '@']).next().unwrap_or(&value);
+            let mut parts = value.splitn(2, ['_', '-']);
+            let language = parts.next().unwrap_or("en").to_ascii_lowercase();
+            match parts.next() {
+                Some(region) if !region.is_empty() => format!("{language}-{}", region.to_ascii_uppercase()),
+                _ => language,
+            }
+        })
+        .unwrap_or_else(|| "en".into())
+}
+
 impl Default for Paths {
     fn default() -> Self {
         let config = env_path("XDG_CONFIG_HOME").or_else(|| env_path("HOME").map(|p| p.join(".config")));
-        let language_file = env_path("OMARCHY_LANGUAGE_FILE").unwrap_or_else(|| {
-            config.unwrap_or_else(|| PathBuf::from("/nonexistent")).join("omarchy/language")
+        let language_file = env_path("FLEA_LANGUAGE_FILE").unwrap_or_else(|| {
+            config.unwrap_or_else(|| PathBuf::from("/nonexistent")).join("flea/language")
         });
         let exe = std::env::current_exe().ok();
         let catalogs = catalog_dirs(env_path("FLEA_I18N"), exe.as_deref(), Path::new(env!("CARGO_MANIFEST_DIR")), cfg!(debug_assertions));
@@ -252,10 +271,24 @@ impl I18n {
         // Stamp before reading so a concurrent edit remains visible to the next poll.
         let language_file = self.watch(self.paths.language_file.clone());
         let registry = self.watch(self.paths.omarchy.join("default/i18n/locales.json"));
-        self.roster = locale::parse(&catalog::read(&registry).unwrap_or_default(), &registry);
+        let roster_text = catalog::read(&registry)
+            .or_else(|| Some(include_str!("fixtures/locales.json").to_owned()))
+            .unwrap_or_default();
+        self.roster = locale::parse(&roster_text, &registry);
         self.language_text = catalog::read(&language_file);
-        let code = language_code(self.language_text.as_deref().unwrap_or_default());
-        self.locale = self.roster.iter().find(|l| l.code == code).cloned()
+        let requested = self.language_text.as_deref().map(language_code).filter(|code| !code.is_empty())
+            .map(str::to_owned).unwrap_or_else(|| {
+                if self.paths.language_file.file_name().is_some_and(|name| name == "language")
+                    && self.paths.language_file.parent().and_then(Path::file_name).is_some_and(|name| name == "flea") {
+                    system_language()
+                } else {
+                    "en".into()
+                }
+            });
+        let normalized = requested.replace('_', "-");
+        let primary = normalized.split('-').next().unwrap_or("en");
+        self.locale = self.roster.iter().find(|l| l.code.eq_ignore_ascii_case(&normalized)).cloned()
+            .or_else(|| self.roster.iter().find(|l| l.code.eq_ignore_ascii_case(primary)).cloned())
             .unwrap_or_else(|| self.roster.iter().find(|l| l.code == "en").unwrap().clone());
         let code = self.locale.code.clone();
         self.english = self.flea_catalog("en", catalog::parse(include_str!("../../i18n/en/flea.json"), false));

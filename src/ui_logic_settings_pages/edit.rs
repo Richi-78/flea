@@ -144,6 +144,9 @@ pub fn step(row: &Row, data: &Json, base: u32, direction: i32) -> Edit {
         return Edit::None;
     }
     let next = walk(&row.values, &row.selected);
+    if row.id == "language" {
+        return Edit::Host(format!("language:{next}"));
+    }
     // The two numeric choices store numbers, as their schema rules require.
     let value = match row.id.as_str() {
         "columnsLimit" | "places.sidebarWidth" => Json::Num(next),
@@ -159,6 +162,9 @@ pub fn pick(row: &Row, data: &Json, base: u32, stop: usize) -> Edit {
     }
     if row.id == "textMode" {
         return step(row, data, base, 1);
+    }
+    if row.id == "language" {
+        return row.values.get(stop).map(|code| Edit::Host(format!("language:{code}"))).unwrap_or(Edit::None);
     }
     // The preset is a choice the oracle holds without values, so its cell names a preset outright.
     if row.id == "preset" {

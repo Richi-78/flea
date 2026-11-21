@@ -265,10 +265,11 @@ Item {
         dropboxCheck.running = true
     }
 
-    // omarchy-launch-terminal runs its argv directly in a real terminal, so the sudo prompt
-    // omarchy-pkg-add may need and the install's own progress are both visible to the user.
+    // Dropbox is not in the CachyOS repositories, so there is no automatic install:
+    // open a terminal with the AUR instruction instead, and keep the prompt visible.
     function installDropbox() {
-        Quickshell.execDetached(["omarchy-launch-terminal", "omarchy", "install", "service", "dropbox"])
+        Quickshell.execDetached(["xdg-terminal-exec", "bash", "-lc",
+            "printf '%s\\n' 'Dropbox is not in the CachyOS repositories.' 'Install it from the AUR, for example: yay -S dropbox' 'Then run: dropbox-cli'; read -r -p 'Press Enter to close...' _"])
         root.close()
     }
 
