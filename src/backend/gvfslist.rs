@@ -2,6 +2,7 @@
 use crate::backend::child::{wait_for_exit, Woke};
 use crate::backend::extclass;
 use crate::backend::listing::{GioMeta, GioTarget, Listing};
+use flea::bytename::ExactText as _;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::mpsc;
@@ -34,7 +35,7 @@ pub fn is_gvfs(path: &Path) -> bool {
     }
     // extclass recognises /run/user/*/gvfs; a session with XDG_RUNTIME_DIR elsewhere keeps the same root.
     match std::env::var("XDG_RUNTIME_DIR").ok().filter(|v| !v.is_empty()) {
-        Some(root) => path.to_string_lossy().starts_with(&format!("{}/gvfs/", root)),
+        Some(root) => path.exact_text().starts_with(&format!("{}/gvfs/", root)),
         None => false,
     }
 }
@@ -63,13 +64,10 @@ pub fn percent_decode(segment: &str) -> String {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
             let hi = (bytes[i + 1] as char).to_digit(16);
             let lo = (bytes[i + 2] as char).to_digit(16);
-            match (hi, lo) {
-                (Some(h), Some(l)) => {
-                    out.push((h * 16 + l) as u8);
-                    i += 3;
-                    continue;
-                }
-                _ => {}
+            if let (Some(h), Some(l)) = (hi, lo) {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+                continue;
             }
         }
         out.push(bytes[i]);
@@ -87,13 +85,10 @@ fn unescape_target(raw: &str) -> String {
         if bytes[i] == b'\\' && i + 3 < bytes.len() && bytes[i + 1] == b'x' {
             let hi = (bytes[i + 2] as char).to_digit(16);
             let lo = (bytes[i + 3] as char).to_digit(16);
-            match (hi, lo) {
-                (Some(h), Some(l)) => {
-                    out.push((h * 16 + l) as u8);
-                    i += 4;
-                    continue;
-                }
-                _ => {}
+            if let (Some(h), Some(l)) = (hi, lo) {
+                out.push((h * 16 + l) as u8);
+                i += 4;
+                continue;
             }
         }
         out.push(bytes[i]);
@@ -151,7 +146,7 @@ pub fn parse_line(line: &str, hidden: bool) -> Result<Option<GvfsRow>, String> {
     let mtime_key = "time::modified=";
     let mtime_at = keys.find(mtime_key).ok_or_else(|| format!("gio attrs name no mtime: {}", attrs))?;
     let mtime_rest = &keys[mtime_at + mtime_key.len()..];
-    let mtime_end = mtime_rest.find(' ').map(|at| at).unwrap_or(mtime_rest.len());
+    let mtime_end = mtime_rest.find(' ').unwrap_or(mtime_rest.len());
     let mtime: i64 =
         mtime_rest[..mtime_end].parse().map_err(|_| format!("gio mtime is not a number: {}", mtime_rest))?;
     // corner: only a parsed decimal unix::mode replaces the fallback; absent or garbled keeps it.
@@ -195,7 +190,7 @@ pub(crate) fn raw_output(path: &str, gio: &str, timeout: Duration) -> Result<Vec
     let mut argv = vec!["list".to_string(), "-u".to_string(), "-a".to_string(), GIO_ATTRS.to_string(), "--nofollow-symlinks".to_string(), "-h".to_string()];
     argv.push(path.to_string());
     let mut child = crate::backend::locale::command(gio)
-        .args(&argv)
+        .args(flea::bytename::args(&argv))
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())

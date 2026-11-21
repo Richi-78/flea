@@ -1,6 +1,5 @@
 // The page cache prefetch behind the first window: the launcher queues the shell's reads; see AGENTS.md "The first window".
 use std::fs;
-use std::io::Read;
 use std::os::unix::fs::{FileExt, OpenOptionsExt};
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
@@ -72,15 +71,9 @@ pub(crate) fn do_warm(list: &Path) {
     }
 }
 
+// A fifo left at the list's path would block a plain open before the window, so the open is the non-blocking one.
 fn read_bounded(list: &Path) -> Option<String> {
-    let file = fs::File::open(list).ok()?;
-    let meta = file.metadata().ok()?;
-    if !meta.is_file() || meta.len() > MAX_LIST_BYTES {
-        return None;
-    }
-    let mut text = String::new();
-    file.take(MAX_LIST_BYTES).read_to_string(&mut text).ok()?;
-    Some(text)
+    crate::backend::regfile::read_text(list, MAX_LIST_BYTES).ok()
 }
 
 // Checked before it is opened, because opening a device node can act on the device.
@@ -212,8 +205,10 @@ fn present_pages(pagemap: &fs::File, start: u64, count: u64, page: u64) -> Vec<b
         return Vec::new();
     }
     bytes
-        .chunks_exact(PAGEMAP_ENTRY_BYTES as usize)
-        .map(|entry| u64::from_le_bytes(entry.try_into().unwrap_or_default()) & PAGEMAP_PRESENT != 0)
+        .as_chunks::<{ PAGEMAP_ENTRY_BYTES as usize }>()
+        .0
+        .iter()
+        .map(|entry| u64::from_le_bytes(*entry) & PAGEMAP_PRESENT != 0)
         .collect()
 }
 

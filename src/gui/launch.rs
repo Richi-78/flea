@@ -37,10 +37,12 @@ fn gpui_argv(binary: &Path, start: Option<&str>, select: Option<&str>) -> Comman
     let mut cmd = Command::new(binary);
     cmd.env_remove("FLEA_PATH").env_remove("FLEA_SELECT");
     if let Some(target) = select {
-        cmd.arg("--select").arg(target);
+        cmd.arg("--select")
+            .arg(flea::bytename::text_path(target).as_os_str());
     }
     if let Some(path) = start {
-        cmd.arg("--").arg(path);
+        cmd.arg("--")
+            .arg(flea::bytename::text_path(path).as_os_str());
     }
     cmd
 }
@@ -237,8 +239,8 @@ fn configure_child(cmd: &mut Command) {
 }
 
 fn set_backend_binary(cmd: &mut Command) {
-    // An explicit choice is the operator's; map_or because is_none_or needs Rust 1.82 over the 1.77 floor.
-    if std::env::var_os("FLEA_BIN").map_or(true, |value| value.is_empty()) {
+    // An explicit choice is the operator's.
+    if std::env::var_os("FLEA_BIN").is_none_or(|value| value.is_empty()) {
         if let Ok(binary) = std::env::current_exe() {
             cmd.env("FLEA_BIN", binary);
         }
@@ -302,6 +304,20 @@ mod tests {
         }
         let bare = gpui_argv(Path::new("flea-gui"), None, None);
         assert_eq!(bare.get_args().count(), 0);
+    }
+
+    #[test]
+    fn a_raw_start_and_selection_reach_the_child_as_their_own_bytes() {
+        use std::os::unix::ffi::OsStrExt;
+        let folder =
+            flea::bytename::path_text(Path::new(OsStr::from_bytes(b"/d/r\xff"))).into_owned();
+        let target = format!("{folder}/{}", flea::bytename::name_text(b"f\xfe.txt"));
+        let cmd = gpui_argv(Path::new("flea-gui"), Some(&folder), Some(&target));
+        let argv: Vec<&[u8]> = cmd.get_args().map(OsStr::as_bytes).collect();
+        assert_eq!(
+            argv,
+            [&b"--select"[..], b"/d/r\xff/f\xfe.txt", b"--", b"/d/r\xff"]
+        );
     }
 
     fn argv_of(command: &Command) -> Vec<String> {

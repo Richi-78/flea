@@ -12,7 +12,7 @@ use crate::{
     jsondoc::Json,
 };
 pub use card::draw;
-use flea::ui_logic_op4::{
+use flea::ui_logic_print_convert::{
     output::{Kind, MAX_ITEMS},
     pages::Pages,
     printing::{self, Capabilities, Destination},
@@ -83,7 +83,7 @@ pub fn kind(m: &Model, row: &Row) -> Kind {
     if row.directory || !row.link.is_empty() {
         return Kind::Other;
     }
-    classify(m, &row.name)
+    classify(m, &row.shown())
 }
 fn classify(m: &Model, path: &str) -> Kind {
     let (mime, aliases) = m
@@ -104,7 +104,7 @@ pub fn offered(m: &Model) -> bool {
             m.selected_rows
                 .get(index)
                 .or_else(|| m.rows.get(index))
-                .map_or(true, |row| kind(m, row).printable())
+                .is_none_or(|row| kind(m, row).printable())
         })
 }
 pub fn open(m: &mut Model, w: &mut Wire, from_menu: bool) -> io::Result<()> {

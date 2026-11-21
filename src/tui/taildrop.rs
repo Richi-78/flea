@@ -245,7 +245,7 @@ impl Taildrop {
         self.child = Some(
             Command::new(sender)
                 .arg(&peer.address)
-                .args(paths)
+                .args(flea::bytename::args(paths))
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -379,7 +379,7 @@ fn peers(value: &Json) -> Vec<Peer> {
             address: address.into(),
         });
     }
-    out.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    out.sort_by_key(|a| a.label.to_lowercase());
     out
 }
 

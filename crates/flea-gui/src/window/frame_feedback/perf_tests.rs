@@ -46,6 +46,7 @@ fn mount(
     &mut VisualTestContext,
     impl FnMut() -> Option<String>,
 ) {
+    cx.update(crate::state::constructor_fixture::isolated_services);
     let (backend, requests) = Backend::test_lines();
     let (root, cx) = cx.add_window_view(|window, cx| {
         let shell = cx.new(|cx| shell_with(backend, cx));
@@ -63,6 +64,8 @@ fn mount(
         });
         Root { shell }
     });
+    // Synthetic frame cadence must not depend on wall-clock inactive throttling.
+    cx.update(|window, _| window.activate_window());
     cx.enable_frame_feedback();
     let shell = root.read_with(cx, |root, _| root.shell.clone());
     edit(&shell, cx, |shell, window, cx| {

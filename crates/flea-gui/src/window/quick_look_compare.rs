@@ -1,15 +1,15 @@
 //! Compare in the Quick Look card: two regular files, one diff asked of the pane's backend (Ops.js open and openCompare).
 use super::{token, Ask};
 use crate::{
-    g2::pv1::{Body, Subject},
+    g2::quick_look_overlay::{Body, Subject},
     state::Shell,
 };
 use flea::{
     json::escape,
     jsondoc::Json,
     protocol::RowFacts,
-    ui_logic_mn1::build::S_IFDIR,
-    ui_logic_pv1::{compare, kinds::State, rect::Shape},
+    ui_logic_context_menus::build::S_IFDIR,
+    ui_logic_preview_core::{compare, kinds::State, rect::Shape},
 };
 use gpui::{Context, Window};
 
@@ -72,7 +72,7 @@ impl Shell {
         host.ask = Ask::Resolve {
             listing,
             rows,
-            mark: held.into_iter().next().flatten(),
+            mark: held.into_iter().next().flatten().map(Box::new),
             kinds: None,
         };
         self.quick_look_send(side, line);
@@ -110,7 +110,7 @@ impl Shell {
                     host.ask = Ask::Resolve {
                         listing,
                         rows,
-                        mark,
+                        mark: mark.map(Box::new),
                         kinds: Some(kinds),
                     };
                     let line = format!(

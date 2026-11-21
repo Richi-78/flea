@@ -11,7 +11,7 @@ use crate::{
         wire,
     },
 };
-use flea::ui_logic_pv4::color::Palette;
+use flea::ui_logic_model_preview::color::Palette;
 use std::{
     fs::File,
     sync::{atomic::AtomicBool, Arc},
@@ -93,7 +93,9 @@ fn still(root: &Fixture, format: &str, source: &[u8], palette: Palette) -> Vec<[
     assert_eq!(still.rgba.len(), PIXELS.0 * PIXELS.1 * 4);
     still
         .rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|p| [p[0], p[1], p[2]])
         .collect()
 }

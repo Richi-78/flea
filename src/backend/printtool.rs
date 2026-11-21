@@ -7,6 +7,26 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
 
+pub struct Sources<'a> {
+    pub selection: Result<Option<Vec<super::menu_actions::Selected>>, String>,
+    pub mime: &'a super::mime::Db,
+    pub aliases: &'a super::aliases::Aliases,
+}
+
+impl Sources<'_> {
+    pub fn kinds(self, paths: &[PathBuf]) -> Result<Vec<super::printconvert::Kind>, String> {
+        let selected = self.selection?;
+        super::menu_actions::validate_sources(selected.as_deref(), paths)?;
+        inputs(paths)?;
+        Ok(paths
+            .iter()
+            .map(|path| {
+                super::printconvert::classify(&path.to_string_lossy(), self.mime, self.aliases)
+            })
+            .collect())
+    }
+}
+
 pub const TOOL_WAIT: Duration = Duration::from_secs(60);
 pub const QUERY_WAIT: Duration = Duration::from_secs(10);
 const OUTPUT_CAP: usize = 64 * 1024;
@@ -39,12 +59,24 @@ fn drain(pipe: impl Read + Send + 'static) -> Receiver<Result<Vec<u8>, String>> 
     rx
 }
 
+// A tool the system lacks is named as missing; only a missing bwrap or prlimit is the sandbox's own fault.
+// Sample input: ["lpstat", "-e"] with NotFound says "lpstat is not installed".
+fn spawn_message(argv: &[String], error: &std::io::Error) -> String {
+    let tool = argv.first().map_or("tool", String::as_str);
+    let launcher = Path::new(tool).file_name().is_some_and(|name| name == sandbox::PRLIMIT || name == sandbox::BWRAP);
+    if error.kind() == std::io::ErrorKind::NotFound && !launcher {
+        format!("{tool} is not installed")
+    } else {
+        format!("{tool}: {}", crate::error::io_message(error))
+    }
+}
+
 pub fn run(argv: &[String], cancel: &AtomicBool, wait: Duration) -> Result<String, Failure> {
     let failure = |message| Failure { message, lingering: false };
     if cancel.load(Ordering::Relaxed) { return Err(failure("cancelled".into())); }
     let mut jailed = jail::spawn_jailed(argv, |cmd| {
         cmd.env("LC_ALL", "C.UTF-8").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    }).map_err(|e| failure(format!("{}: {}", argv.first().map_or("tool", String::as_str), crate::error::io_message(&e))))?;
+    }).map_err(|e| failure(spawn_message(argv, &e)))?;
     let stdout = drain(jailed.child.stdout.take().expect("piped stdout"));
     let stderr = drain(jailed.child.stderr.take().expect("piped stderr"));
     let end = Instant::now() + wait;
@@ -101,10 +133,11 @@ pub fn stage(source: &Path, dest: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn publish(staged: &Path, dest: &Path) -> Result<(), String> {
+pub fn publish(staged: &Path, dest: &Path, cancel: &AtomicBool) -> Result<(), String> {
     let meta = staged.symlink_metadata().map_err(|_| "the converter wrote nothing".to_string())?;
     if !meta.is_file() || meta.len() == 0 { return Err("the converter wrote no regular output file".into()); }
-    super::ops::rename_noreplace(staged, dest).map_err(|e| e.msg)
+    // Issue 370: a stage workhome kept off a copy-fallback mount lands by the exclusive copy, which the job's cancel stops.
+    super::renamecompat::rename_cancellable(staged, dest, cancel).map_err(|e| e.msg)
 }
 
 pub fn inputs(paths: &[PathBuf]) -> Result<(), String> {

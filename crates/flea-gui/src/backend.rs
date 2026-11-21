@@ -17,6 +17,7 @@ mod transport;
 pub use transport::list_line;
 
 pub mod status;
+pub(crate) mod transfers;
 mod worker;
 
 #[derive(Clone, Debug)]
@@ -116,10 +117,13 @@ pub struct Backend {
     wake: UnixStream,
     pub replies: Receiver<Event>,
     drained: Receiver<()>,
+    #[cfg(test)]
+    worker: Mutex<Option<thread::JoinHandle<()>>>,
     /// Backend.qml thumbRequests: every thumb line this backend was sent.
     thumbs: std::sync::atomic::AtomicUsize,
     /// Each recently listed folder's "w", which Backend.qml keeps as dirWritable.
     folders: Arc<Mutex<Writable>>,
+    transfers: Arc<Mutex<transfers::Transfers>>,
 }
 
 /// The "w" of the last folders a backend listed, so a listing of another folder never answers for this one.
@@ -170,13 +174,6 @@ impl Backend {
         self.thumbs.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Menu producer requests share the ordered backend pipe.
-    pub fn line(&self, line: String) -> Result<(), Failure> {
-        if flea::json::field_str(&line, "c").as_deref() == Some("formats") {
-            self.formats_requests.fetch_add(1, Ordering::Relaxed);
-        }
-        self.send(Control::Line(line))
-    }
     /// Backend.qml dirWritable for this folder; a folder no listed line has named yet reads writable.
     pub fn dir_writable(&self, path: &str) -> bool {
         self.folders
@@ -231,16 +228,21 @@ impl Backend {
         let state = closing.clone();
         let folders = Arc::new(Mutex::new(Writable::default()));
         let listed = folders.clone();
+        let transfers = Arc::new(Mutex::new(transfers::Transfers::default()));
+        let answered = transfers.clone();
+        let exited = transfers.clone();
         let (output, replies) = async_channel::unbounded();
         let (done, drained) = async_channel::bounded(1);
         let plugin_output = output.clone();
-        thread::Builder::new()
+        let _worker = thread::Builder::new()
             .name("flea-backend".into())
             .spawn(move || {
-                let worker = worker::Worker::new(receiver, listener, state, listed, &output);
+                let worker =
+                    worker::Worker::new(receiver, listener, state, (listed, answered), &output);
                 if let Err(error) = worker.run(command, first_line) {
-                    let _ = output.try_send(Event::Failed(error));
+                    transport::failed(&output, error);
                 }
+                exited.lock().unwrap_or_else(PoisonError::into_inner).stop();
                 let _ = output.try_send(Event::Drained);
                 let _ = done.try_send(());
             })?;
@@ -253,8 +255,11 @@ impl Backend {
             wake,
             replies,
             drained,
+            #[cfg(test)]
+            worker: Mutex::new(Some(_worker)),
             thumbs: Default::default(),
             folders,
+            transfers,
         })
     }
 
@@ -300,7 +305,7 @@ impl Backend {
     }
 
     pub fn rows(&self, command: &'static str, action: RowAction) -> Result<(), Failure> {
-        if !matches!(command, "paths" | "trash" | "dirsize")
+        if !matches!(command, "paths" | "trash" | "dirsize" | "dirsizecancel")
             || action.listing == 0
             || action.rows.is_empty()
         {
@@ -325,13 +330,18 @@ impl Backend {
     }
 
     fn send(&self, control: Control) -> Result<(), Failure> {
+        self.place(control).map(drop)
+    }
+
+    /// True when a plugin place took the line instead of the backend.
+    fn place(&self, control: Control) -> Result<bool, Failure> {
         let closing = self.closing.lock().unwrap();
         if *closing != Closing::Open {
             return Err(failure("window.backend_stopped", ""));
         }
         if let Some(route) = self.plugin_route.get() {
             if route.intercept(&control)? {
-                return Ok(());
+                return Ok(true);
             }
         }
         let thumb = matches!(&control, Control::Line(line) if line.starts_with(r#"{"c":"thumb","#));
@@ -344,7 +354,7 @@ impl Backend {
         }
         drop(closing);
         self.notify();
-        Ok(())
+        Ok(false)
     }
 
     pub fn drained(&self) -> Receiver<()> {

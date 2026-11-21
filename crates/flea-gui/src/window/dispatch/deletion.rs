@@ -34,6 +34,9 @@ impl Shell {
         }) {
             return;
         }
+        if host.pane.state.search {
+            return;
+        }
         host.selected.clear();
         let Some(anchor) = anchor.filter(|anchor| {
             anchor.path == host.pane.path()
@@ -78,3 +81,7 @@ impl Shell {
         cx.notify();
     }
 }
+
+#[cfg(test)]
+#[path = "deletion_grid_tests.rs"]
+mod tests;

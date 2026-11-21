@@ -74,6 +74,7 @@ pub fn parse_request(line: &str) -> Request {
         },
         Some("airdrop") => Request::AirDrop {
             peer: field_str(line, "peer").unwrap_or_default(),
+            name: field_str(line, "name").unwrap_or_default(),
             paths: field_str_array(line, "paths"),
             id: field_usize(line, "id").unwrap_or(0),
         },
@@ -128,6 +129,11 @@ pub fn parse_request(line: &str) -> Request {
             sizes: field_usize(line, "sizes"),
         },
         Some("searchclose") => Request::SearchClose,
+        // {"c":"searchremap","gen":7,"from":12,"rows":[0,900],"cursor":900}
+        Some("searchremap") => Request::SearchRemap {
+            gen: field_usize(line, "gen").unwrap_or(0), from: field_usize(line, "from").unwrap_or(0),
+            rows: field_usize_array(line, "rows"), cursor: field_usize(line, "cursor").unwrap_or(usize::MAX),
+        },
         Some("thumb") => match crate::backend::thumbreq::identity::Tag::parse(line) {
             Ok(identity) => Request::Thumb { rows: field_usize_array(line, "rows"), cache_only: field_bool(line, "cacheOnly"), identity },
             Err(_) => Request::Unknown,
@@ -144,7 +150,9 @@ pub fn parse_request(line: &str) -> Request {
         Some("dirsize") => Request::DirSize {
             rows: field_usize_array(line, "rows"),
         },
-        Some("dirsizecancel") => Request::DirSizeCancel,
+        Some("dirsizecancel") => Request::DirSizeCancel {
+            rows: field_usize_array(line, "rows"),
+        },
         Some("transfer") => Request::Transfer {
             // Anything that is not "move" is a copy, so a malformed op can never delete a source.
             op: field_str(line, "op").unwrap_or_default(),

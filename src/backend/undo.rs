@@ -474,6 +474,8 @@ impl Journal {
             let op = entry.op.clone();
             self.last_touched = Reached::of(&entry.steps);
             let mut changes = Vec::new();
+            // Every home restore below syncs its folders once at close, before the journal records the undo.
+            let syncs = super::homerestore::SyncBatch::open();
             for step in entry.steps.iter().rev() {
                 match reverse(step) {
                     Ok(Some((old, new))) => {
@@ -482,12 +484,14 @@ impl Journal {
                     }
                     Ok(None) => {}
                     Err(error) => {
+                        syncs.close();
                         let _ = super::undoshare::finish_undone(&shared, None, &changes, gen);
                         self.prune();
                         return Err(error);
                     }
                 }
             }
+            syncs.close();
             let _ = super::undoshare::finish_undone(&shared, Some(entry), &changes, gen);
             self.prune();
             return Ok(op);
@@ -503,6 +507,7 @@ impl Journal {
         self.last_touched = Reached::of(&entry.steps);
         let mut skipped: Vec<String> = Vec::new();
         let mut restored: Vec<Step> = Vec::new();
+        let syncs = super::homerestore::SyncBatch::open();
         for step in entry.steps.iter().rev() {
             if matches!(step, Step::Mode { .. } | Step::Tags { .. }) {
                 if let Err(e) = reverse(step) {
@@ -514,6 +519,7 @@ impl Journal {
             }
             if let Some((old, new)) = reverse(step)? { self.rebase(&old, &new); }
         }
+        syncs.close();
         if !skipped.is_empty() {
             // The undone half stays redoable, so redo replays it before anything older.
             if !restored.is_empty() {
@@ -712,7 +718,7 @@ fn remove(path: &PathBuf) -> Result<(), FleaError> {
         .symlink_metadata()
         .map_err(|e| from_io("undo", &path.to_string_lossy(), &e))?;
     let r = if meta.is_dir() && !meta.file_type().is_symlink() {
-        std::fs::remove_dir_all(path)
+        super::copyfile::deep::remove_deep(path, false)
     } else {
         std::fs::remove_file(path)
     };
@@ -752,11 +758,9 @@ fn remove_link(path: &Path, identity: &ItemIdentity, source: &Path, kind: &super
 
 // Only ever an empty directory this operation made.
 fn remove_empty(path: &PathBuf) -> Result<(), FleaError> {
-    // ENOTEMPTY from Linux errno.h: ErrorKind::DirectoryNotEmpty needs Rust 1.83 over the 1.77 floor.
-    const ENOTEMPTY: i32 = 39;
     match std::fs::remove_dir(path) {
         Ok(()) => Ok(()),
-        Err(e) if e.raw_os_error() == Some(ENOTEMPTY) => Err(FleaError {
+        Err(e) if e.kind() == std::io::ErrorKind::DirectoryNotEmpty => Err(FleaError {
             where_: "undo".to_string(),
             path: path.to_string_lossy().to_string(),
             msg: "the new folder has been filled since, so undo left it in place".to_string(),

@@ -254,7 +254,10 @@ fn a_quarantine_that_still_holds_items_names_where_they_are_kept() {
     let (path, reviewed) = fixture(&d, &d.join("restored"));
     let quarantine = d.dir("files/.flea-delete-remains");
     let (files, held) = (open_dir(&d.join("files")).unwrap(), open_dir(&quarantine).unwrap());
-    let mut journal = Recovery::begin(&d.dir("recovery"), &path, &files, &reviewed.payload, None, &quarantine, &held, None, None).unwrap();
+    let mut journal = Recovery::begin(&d.dir("recovery"), recovery::RecordInput {
+        source: &path, parent: &files, payload: &reviewed.payload, paired: None,
+        quarantine_path: &quarantine, quarantine: &held, tree: None, destination: None,
+    }).unwrap();
     d.file("files/.flea-delete-remains/stray", "x");
     let refused = journal.remove_empty(&quarantine, &held, &files).unwrap_err();
     assert_eq!(refused.shown(), format!("Flea found an interrupted Trash operation; its items are kept at {}.", quarantine.display()));
@@ -356,3 +359,35 @@ fn the_outcomes_a_fixture_cannot_reach_still_say_one_sentence_and_log_their_deta
 
 #[path = "completion_refusal_tests.rs"]
 mod completion;
+
+// Base refused this item as not valid text; its review now saves, reloads and deletes the raw file and its record.
+#[test]
+fn a_raw_named_item_is_reviewed_saved_and_deleted_by_its_own_bytes() {
+    let d = TestDir::new("trash-delete-raw");
+    d.dir("files");
+    d.dir("info");
+    let path = d.join("files").join(OsStr::from_bytes(b"r\xff"));
+    let info = d.join("info").join(OsStr::from_bytes(b"r\xff.trashinfo"));
+    std::fs::write(&path, "payload").unwrap();
+    std::fs::write(&info, "[Trash Info]\nPath=/original/r%FF\n").unwrap();
+    let meta = path.symlink_metadata().unwrap();
+    let mut reviewed =
+        Reviewed::inspect(path.clone(), &format!("l{}:{}", meta.dev(), meta.ino())).unwrap();
+    let mut manifest = Manifest::new(d.path()).unwrap();
+    reviewed
+        .snapshot(&mut manifest, d.path(), &Cancellation::default())
+        .unwrap();
+    let restored = Reviewed::from_saved(&reviewed.saved().unwrap(), &manifest).unwrap();
+    assert!(
+        restored
+            .contents_unchanged(&Cancellation::default())
+            .unwrap(),
+        "the reloaded review names the raw file"
+    );
+    guard(&d, &path);
+    restored.delete(d.path()).unwrap();
+    assert!(
+        !path.exists() && !info.exists(),
+        "the raw item and its own record are gone"
+    );
+}

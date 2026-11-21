@@ -194,7 +194,7 @@ fn label(canonical: &str, snapshot: &flea::keys::display::KeycapSnapshot) -> Res
 fn pack(groups: &[Vec<Line>], capacity: usize) -> Vec<Vec<Line>> {
     let mut columns: Vec<Vec<Line>> = Vec::new();
     for group in groups {
-        if columns.last().map_or(true, |column| !column.is_empty() && column.len() + group.len() > capacity) { columns.push(Vec::new()); }
+        if columns.last().is_none_or(|column| !column.is_empty() && column.len() + group.len() > capacity) { columns.push(Vec::new()); }
         columns.last_mut().unwrap().extend(group.iter().cloned());
     }
     columns
@@ -217,7 +217,12 @@ struct Sheet { columns: Vec<Vec<Line>>, rows: usize, height: usize }
 fn sheet(m: &Model, map: &Map) -> Sheet {
     let groups = groups(m, map);
     let height = m.height.saturating_sub(2).max(1);
-    let rows = if height > 4 { height - 3 } else { height.saturating_sub(2) }.max(1);
+    // A card with room only for its title and rule shows no rows, never one drawn over its bottom border.
+    let rows = if height > 4 {
+        height - 3
+    } else {
+        height.saturating_sub(2)
+    };
     let room = cards::room(m.columns);
     for count in (1..=COLUMNS).rev() {
         let mut capacity = rows;

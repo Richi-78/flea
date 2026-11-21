@@ -1,9 +1,20 @@
 //! Wire adapters keep the optional denied-directory mode and captured row numbering intact.
-use super::{Event, Located};
+use super::{Event, Failure, Located};
 use crate::navigation::{folder_state::Order, Command, Listing};
 use crate::pane::requests::RowAction;
 use flea::{json::escape, jsondoc, protocol::parse_reply, protocol::Reply};
 use std::io::{self, Write};
+
+pub(super) fn failed(output: &async_channel::Sender<Event>, error: Failure) {
+    let _sent = output.try_send(Event::Failed(error));
+    #[cfg(test)]
+    if let Err(error) = _sent {
+        panic!(
+            "backend fixture lost a worker failure: {:?}",
+            error.into_inner()
+        );
+    }
+}
 
 pub(super) fn parse(line: &str) -> Result<Event, String> {
     match parse_reply(line)? {
@@ -23,7 +34,7 @@ pub(super) fn parse(line: &str) -> Result<Event, String> {
             mode,
         }),
         Reply::Other => Ok(other(line)?.unwrap_or_else(|| {
-            if flea::ui_logic_op1::parse(line).is_some()
+            if flea::ui_logic_file_ops::parse(line).is_some()
                 && flea::jsondoc::parse(line)
                     .ok()
                     .and_then(|doc| {
@@ -343,7 +354,7 @@ mod tab_peek_tests {
     fn ey65_fsinfo_figures_are_a_status_fact_with_or_without_a_class() {
         let bare = parse(r#"{"t":"fsinfo","path":"/a","fs":"btrfs","free":5}"#).unwrap();
         assert!(
-            matches!(bare, Event::Filesystem(facts) if facts.name == "btrfs" && facts.free == 5)
+            matches!(bare, Event::Filesystem(facts) if facts.name == "btrfs" && facts.free == Some(5))
         );
         let classed =
             parse(r#"{"t":"fsinfo","path":"/a","fs":"","free":-1,"class":"ssd"}"#).unwrap();

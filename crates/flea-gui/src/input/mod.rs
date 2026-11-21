@@ -6,6 +6,7 @@ mod element;
 pub mod focus;
 mod pointer;
 mod pointer_press;
+mod positions;
 pub mod scroll;
 pub mod selection;
 // The oracle tests keep their input::slow path while the rename owner supplies the shared policy.
@@ -56,10 +57,36 @@ pub fn glided(glide: Option<Glide>, at: f32) -> f32 {
     })
 }
 
+/// Half a pixel: a row edge within it of the viewport edge counts as drawn whole, so float drift never cuts a row.
+const WHOLE_SLACK: f32 = 0.5;
+
+/// The first and last row lines wholly inside the viewport at `scroll`; the floor rows when no line fits whole.
+fn whole_lines(frame: Frame, scroll: f32) -> (usize, usize) {
+    let (grow, row) = (frame.grow, frame.row);
+    // Grid lines start below the grid's top gap; list lines start at the content top.
+    let scroll = scroll - frame.cell_origin.1;
+    let lines = frame.total.div_ceil(frame.columns.max(1));
+    let end = scroll + frame.viewport();
+    let floor = grow.position_at(scroll, row).min(lines - 1);
+    let visible = ((frame.viewport() / row).ceil() as usize).max(1);
+    let mut top = floor;
+    if grow.top(top, row) < scroll - WHOLE_SLACK {
+        top += 1;
+    }
+    let mut bottom = grow.position_at(end, row).min(lines - 1);
+    while bottom > top && grow.top(bottom, row) + grow.height(bottom, row) > end + WHOLE_SLACK {
+        bottom -= 1;
+    }
+    if top > bottom || grow.top(bottom, row) + grow.height(bottom, row) > end + WHOLE_SLACK {
+        return (floor, (floor + visible - 1).min(lines - 1));
+    }
+    (top, bottom)
+}
+
 #[derive(Default)]
 pub struct PaneInput {
     pub selection: Selection,
-    pub shown: Option<std::rc::Rc<[usize]>>,
+    pub shown: positions::Rows,
     pub hit_boxes: Option<HitBoxes>,
     pub hovered: Option<usize>,
     pub pointer_origin: bool,
@@ -185,6 +212,10 @@ pub struct Band {
 }
 
 impl PaneInput {
+    pub(crate) fn prepared_frame(&self) -> Option<Frame> {
+        self.prepared
+    }
+
     /// Call before preparing a view's row states so rollback and the new geometry present together.
     pub fn prepare(&mut self, frame: Frame, selected: &mut Vec<usize>, cursor: &mut usize) {
         // A rename band moves only the rows below its own row, and gestures hold content positions, so it never cancels one.
@@ -214,14 +245,21 @@ impl PaneInput {
     }
     /// List.qml:213-231 and Filter.js:241-251: after a scroll outside a band the cursor stays in the viewport rows.
     pub fn scrolled(&mut self, scroll: f32, cursor: &mut usize) {
-        let Some(mut frame) = self.frame.filter(|frame| frame.total > 0) else {
+        let views = |frame: Frame| {
+            self.shown
+                .as_ref()
+                .map_or(frame.total, |s| s.len().min(frame.total))
+        };
+        let Some(mut frame) = self.frame.filter(|&frame| views(frame) > 0) else {
             return;
         };
+        // Under a filter the clamp moves over the shown rows only, never onto a hidden one.
+        frame.total = views(frame);
         frame.scroll = scroll;
         let columns = frame.columns.max(1);
-        let first = frame.grow.position_at(scroll, frame.row) * columns;
-        let visible = ((frame.viewport() / frame.row).ceil() as usize).max(1);
-        let last = ((first / columns + visible) * columns - 1).min(frame.total - 1);
+        let (top, bottom) = whole_lines(frame, scroll);
+        let first = top * columns;
+        let last = ((bottom + 1) * columns - 1).min(frame.total - 1);
         let first = first.min(last);
         let was = self.view_index(*cursor);
         let to = was.clamp(first, last);
@@ -251,18 +289,6 @@ impl PaneInput {
         self.wrote = None;
         self.motion_at = None;
     }
-    pub fn index(&self, view: usize) -> usize {
-        self.shown
-            .as_ref()
-            .and_then(|shown| shown.get(view))
-            .copied()
-            .unwrap_or(view)
-    }
-    pub fn view_index(&self, row: usize) -> usize {
-        self.shown.as_ref().map_or(row, |shown| {
-            shown.binary_search(&row).unwrap_or_else(|at| at)
-        })
-    }
     pub fn hit(&self, point: Point<Pixels>) -> Option<usize> {
         let frame = self.frame?;
         self.hit_in(frame, point)
@@ -281,7 +307,7 @@ impl PaneInput {
     }
     /// The listing row drawn at this position; under a filter the frame spans every held row, so a position past the drawn ones is blank ground.
     pub fn drawn_row(&self, view: usize) -> Option<usize> {
-        match &self.shown {
+        match self.shown.as_ref() {
             Some(shown) => shown.get(view).copied(),
             None => Some(view),
         }
@@ -336,14 +362,17 @@ impl PaneInput {
     }
     /// A new filter answer renumbers the view rows, so a band in flight rebuilds from its starting marks.
     pub fn set_shown(&mut self, shown: Option<std::rc::Rc<[usize]>>) {
-        let same = match (&self.shown, &shown) {
+        let same = match (self.shown.as_ref(), shown.as_ref()) {
             (Some(old), Some(new)) => std::rc::Rc::ptr_eq(old, new),
             (old, new) => old.is_none() && new.is_none(),
         };
-        if let Some(band) = self.band.as_mut().filter(|_| !same) {
+        if same {
+            return;
+        }
+        if let Some(band) = self.band.as_mut() {
             band.basis = None;
         }
-        self.shown = shown;
+        self.shown = positions::Rows::new(shown);
     }
     pub fn cancel(&mut self, selected: &mut Vec<usize>, cursor: &mut usize) {
         if let Some(band) = self.band.take().filter(|band| band.active) {
@@ -359,3 +388,5 @@ impl PaneInput {
 
 #[cfg(test)]
 mod band_delta_tests;
+#[cfg(test)]
+mod whole_rows_tests;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::backend::{aliases::Aliases, icons::Names, kind::Kinds, mime::Db, rows, tags, testdir::TestDir, thumbspec::Thumbnailers};
 use crate::backend::watch::{IN_IGNORED, IN_Q_OVERFLOW, IN_UNMOUNT};
-use std::os::unix::fs::{symlink, PermissionsExt};
+use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 
 fn listing(names: &[&str]) -> Listing {
     let mut listing = Listing::new();
@@ -17,7 +17,7 @@ fn render(cache: &mut Cache, base: &Path, listing: &Listing, start: usize, count
     let (metas, _) = cache.window(base, listing, start, count, body);
     let aliases = Aliases::load();
     let thumbs = Thumbnailers::load(&aliases);
-    rows::rows_line_cached(base, body, listing, &metas, start, 0.0, &Db::load(), &Names::load(), &aliases, &thumbs, &mut Kinds::new(), cache)
+    rows::rows_line_cached(base, body, listing, &metas, crate::backend::rows::Window { start, ms: 0.0 }, crate::backend::rows::Services { mime: &Db::load(), icons: &Names::load(), aliases: &aliases, thumbs: &thumbs, kinds: &mut Kinds::new() }, cache)
 }
 
 #[test]
@@ -35,6 +35,28 @@ fn search_row_cache_stats_each_row_and_reuses_only_fresh_intersecting_tags() {
     assert!(!cache.entries.contains_key(&d.join("a.txt")), "scrolled-past identity is discarded");
     render(&mut cache, d.path(), &l, 0, 3, "");
     assert_eq!(counts(), (4, 1), "returning to an evicted identity is a cold miss");
+}
+
+#[test]
+fn search_row_cache_keeps_a_raw_named_row_under_its_own_path() {
+    use flea::bytename::ExactText as _;
+    use std::os::unix::ffi::OsStrExt;
+    let d = TestDir::new("search-row-raw");
+    let raw = std::ffi::OsStr::from_bytes(b"caf\xe9.txt");
+    std::fs::write(d.path().join(raw), "raw").unwrap();
+    let mut cache = Cache::default();
+    render(
+        &mut cache,
+        d.path(),
+        &listing(&[&raw.exact_text()]),
+        0,
+        1,
+        "",
+    );
+    assert!(
+        cache.entries.contains_key(&d.path().join(raw)),
+        "the raw row is cached at the file it names"
+    );
 }
 
 #[test]
@@ -108,6 +130,22 @@ fn search_row_cache_bypasses_symlinks_unwatched_remotes_and_failed_watches() {
     super::test_support::assert_cleared(&cache);
 }
 
+// Sample input: the row's own device mounted as a host's virtiofs share, which no guest-side watch hears the host change.
+#[test]
+fn search_row_cache_never_keeps_a_row_on_a_vm_share() {
+    let d = TestDir::new("search-row-vmshare");
+    d.file("file.txt", "a");
+    let l = listing(&["file.txt"]);
+    let majmin = super::super::mountinfo::dev_majmin(std::fs::symlink_metadata(d.join("file.txt")).unwrap().dev());
+    let as_kind = |kind: &str| format!("1 0 {} / {} rw - {} share rw\n", majmin, d.path().display(), kind);
+    let mut cache = Cache::default();
+    for _ in 0..2 { cache.window(d.path(), &l, 0, 1, &as_kind("virtiofs")); }
+    assert!(cache.entries.is_empty(), "a row on a VM share reads cold on every ask");
+    // Negative control: the same row on a local disk is kept by its second ask.
+    for _ in 0..2 { cache.window(d.path(), &l, 0, 1, &as_kind("ext4")); }
+    assert_eq!(cache.entries.len(), 1, "a local row arms and is kept");
+}
+
 #[test]
 fn search_row_cache_is_bounded_and_clears_all_session_state() {
     let d = TestDir::new("search-row-bound");
@@ -154,10 +192,10 @@ fn search_fb5_probe_rich_rows_latency() {
             let before = cache.misses;
             let _line = if label == "baseline" {
                 let (metas, _) = super::super::meta::stat_range(d.path(), &l, offset, 350);
-                rows::rows_line(d.path(), &l, &metas, offset, 0.0, &mime, &icons, &aliases, &thumbs, &mut kinds)
+                rows::rows_line(d.path(), &l, &metas, crate::backend::rows::Window { start: offset, ms: 0.0 }, crate::backend::rows::Services { mime: &mime, icons: &icons, aliases: &aliases, thumbs: &thumbs, kinds: &mut kinds })
             } else {
                 let (metas, _) = cache.window(d.path(), &l, offset, 350, &body);
-                rows::rows_line_cached(d.path(), &body, &l, &metas, offset, 0.0, &mime, &icons, &aliases, &thumbs, &mut kinds, &mut cache)
+                rows::rows_line_cached(d.path(), &body, &l, &metas, crate::backend::rows::Window { start: offset, ms: 0.0 }, crate::backend::rows::Services { mime: &mime, icons: &icons, aliases: &aliases, thumbs: &thumbs, kinds: &mut kinds }, &mut cache)
             };
             let elapsed = start.elapsed().as_secs_f64() * 1e6;
             let work = counts();

@@ -19,6 +19,8 @@ type Counters = [u64; COUNTER_SLOT_COUNT];
 
 fn reader_only_counts() -> Counters {
     let mut counts = [0; COUNTER_SLOT_COUNT];
+    // 14261ccb3's work-cache is_dir at startup: its ENOENT statx, then std's statx(0, NULL) availability probe.
+    counts[METADATA_CALLS] = 2;
     counts[THREAD_STARTS] = 1;
     counts
 }
@@ -121,8 +123,8 @@ fn counters(path: &Path) -> Counters {
     let bytes = std::fs::read(path).unwrap();
     assert_eq!(bytes.len(), COUNTER_FILE_BYTES);
     let mut counts = [0; COUNTER_SLOT_COUNT];
-    for (slot, bytes) in counts.iter_mut().zip(bytes.chunks_exact(std::mem::size_of::<u64>())) {
-        *slot = u64::from_ne_bytes(bytes.try_into().unwrap());
+    for (slot, bytes) in counts.iter_mut().zip(bytes.as_chunks::<{ std::mem::size_of::<u64>() }>().0) {
+        *slot = u64::from_ne_bytes(*bytes);
     }
     counts
 }

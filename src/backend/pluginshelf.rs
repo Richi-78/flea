@@ -2,7 +2,7 @@
 use super::plugins::{Env, Installed};
 use flea::jsondoc::Json;
 use flea::plugin_runtime::{protocol, Reply};
-use flea::ui_logic_st2::{manifest::Invalid, wire::Source};
+use flea::ui_logic_plugin_settings::{manifest::Invalid, wire::Source};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -23,7 +23,7 @@ pub(super) fn switch(env: &Env, found: &Installed, on: bool) -> Result<(), Inval
 fn omarchy(env: &Env, name: &str, on: bool) -> Result<(), String> {
     let mut command = Command::new(&env.plugin_manager);
     command.args(["plugin", if on { "enable" } else { "disable" }, name]);
-    if std::env::var_os("OMARCHY_PATH").map_or(true, |p| p.is_empty()) {
+    if std::env::var_os("OMARCHY_PATH").is_none_or(|p| p.is_empty()) {
         command.env("OMARCHY_PATH", "/usr/share/omarchy");
     }
     command

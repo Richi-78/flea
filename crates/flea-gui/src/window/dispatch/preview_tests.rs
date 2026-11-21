@@ -2,7 +2,7 @@
 use super::test_shell::{keystroke, land, open_root, row, set_cursor};
 use crate::{
     backend::{Backend, Event as BackendEvent},
-    g2::pv1::Body,
+    g2::quick_look_overlay::Body,
     state::Shell,
     window::u07_tests::read,
 };
@@ -15,9 +15,18 @@ use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext};
 
 pub(super) type Lines = Box<dyn FnMut() -> Option<String>>;
 
+#[path = "quick_look_inactive_tests.rs"]
+mod inactive;
+
 // The window under its root with the pane's backend replaced by one that records each request line.
 pub(super) fn opened(cx: &mut TestAppContext) -> (Entity<Shell>, &mut VisualTestContext, Lines) {
     let (shell, cx) = open_root(cx, "default");
+    cx.update(|window, _| window.activate_window());
+    cx.run_until_parked();
+    assert!(
+        cx.update(|window, _| window.is_window_active()),
+        "Quick Look frame fixture must be active before timed work"
+    );
     let (backend, requests) = Backend::test_lines();
     shell.update(cx, |shell, _| {
         shell.panes[0].as_mut().unwrap().backend = Some(backend)
@@ -169,7 +178,7 @@ fn space_opens_quick_look_on_the_cursor_file_and_space_or_escape_closes_it(
         let host = shell.quick_look.as_ref()?;
         match &host.view.read(cx).subject()?.body {
             Body::Doc(doc) => match &doc.view {
-                crate::g2::pv1::doc::View::Code(code) => {
+                crate::g2::quick_look_overlay::doc::View::Code(code) => {
                     let code = code.read(cx);
                     Some((code.numbered, code.lines.plain_lines()))
                 }

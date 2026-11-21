@@ -328,10 +328,9 @@ mod tests {
         assert_eq!(empty.len(), 0);
     }
 
-    // A name that is not UTF-8 never reaches this comparator: the arena is a String and scan.rs:16
-    // already converts lossily at the readdir, with its own corner tag there. What does reach it is
-    // a multi-byte UTF-8 name, and above ASCII there is no case folding and no collation, which is
-    // exactly what the comparator's corner tag promises.
+    // A name that is not UTF-8 reaches this comparator as its exact text, see src/bytename.rs. What
+    // this pins is a multi-byte UTF-8 name: above ASCII there is no case folding and no collation,
+    // which is exactly what the comparator's corner tag promises.
     #[test]
     fn a_name_above_ascii_orders_by_code_point_and_sorts_after_every_ascii_letter() {
         assert_eq!(ordered(&["\u{e9}clair.txt", "apple.txt", "Zebra.txt"]),
@@ -384,14 +383,14 @@ mod tests {
         };
         let names = |l: &Listing| (0..l.len()).map(|i| l.name(i).to_string()).collect::<Vec<_>>();
         let mut asc = pushed();
-        ordered(&mut asc, d.path(), &db, "kind", false, true, false, false).unwrap();
+        ordered(&mut asc, d.path(), &db, crate::backend::sortkey::SortKey { by: "kind", desc: false }, true, false, false).unwrap();
         assert_eq!(names(&asc), [".bashrc", "README", "a.lrf", "c.LRF", "b.MP4", "z.mp4"]);
         let mut desc = pushed();
-        ordered(&mut desc, d.path(), &db, "kind", true, true, false, false).unwrap();
+        ordered(&mut desc, d.path(), &db, crate::backend::sortkey::SortKey { by: "kind", desc: true }, true, false, false).unwrap();
         let mut rev = names(&asc); rev.reverse();
         assert_eq!(names(&desc), rev);
         let mut f = pushed(); f.push("zebra", true);
-        ordered(&mut f, d.path(), &db, "kind", false, true, false, false).unwrap();
+        ordered(&mut f, d.path(), &db, crate::backend::sortkey::SortKey { by: "kind", desc: false }, true, false, false).unwrap();
         assert_eq!(f.name(0), "zebra");
     }
 }

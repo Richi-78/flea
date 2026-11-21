@@ -5,7 +5,7 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::g2::mn1::foldhash;
+use crate::g2::context_menus::foldhash;
 
 // Each test process owns its cached executable so concurrent suites cannot replace it.
 pub(super) fn binary() -> &'static Path {
@@ -14,7 +14,7 @@ pub(super) fn binary() -> &'static Path {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let executable = std::env::current_exe().unwrap();
         let dependencies = executable.parent().unwrap();
-        let library = foldhash::core_library(dependencies, &executable);
+        let library = foldhash::core_library(&executable);
         let binary = dependencies.join(format!("flea-plugin-host-{}", std::process::id()));
         let output = Command::new("rustc")
             .arg("--edition=2021")
@@ -22,9 +22,7 @@ pub(super) fn binary() -> &'static Path {
             .arg(workspace.join("src/main.rs"))
             .arg("--extern")
             .arg(format!("flea={}", library.display()))
-            .args(foldhash::backend_extern_args(&workspace, dependencies))
-            .arg("-L")
-            .arg(format!("dependency={}", dependencies.display()))
+            .args(foldhash::backend_extern_args(&workspace, &executable))
             .arg("-o")
             .arg(&binary)
             .env("CARGO_MANIFEST_DIR", &workspace)

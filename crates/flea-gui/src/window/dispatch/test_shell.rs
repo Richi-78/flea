@@ -1,4 +1,9 @@
 //! The production Shell the dispatch tests drive: the native constructor with only the backend process replaced.
+#[path = "mtp_critic_tests.rs"]
+mod mtp_critic_tests;
+#[path = "mtp_reload_tests.rs"]
+mod mtp_reload_tests;
+
 use crate::{
     backend::{Backend, Event as BackendEvent},
     navigation::folder_state::Writer,
@@ -55,7 +60,7 @@ pub(crate) fn open_root<'a>(
 }
 
 // The native root with its own settings fields and a --select path.
-pub(super) fn open_root_with<'a>(
+pub(crate) fn open_root_with<'a>(
     cx: &'a mut TestAppContext,
     settings: &str,
     select: Option<&str>,
@@ -198,6 +203,7 @@ pub(super) fn sent() -> Vec<String> {
 
 pub(super) fn row(name: &str, dir: bool) -> RowFacts {
     RowFacts {
+        source: Some(format!("1:2:{}", if dir { 0o040000 } else { 0o100000 })),
         name: name.into(),
         dir,
         ..RowFacts::default()

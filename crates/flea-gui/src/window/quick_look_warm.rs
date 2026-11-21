@@ -28,9 +28,9 @@ pub(crate) struct Warm {
     prepare_timer: Option<Task<()>>,
     prepared_watch: Option<Subscription>,
     storage: Option<(String, String)>,
-    pub(crate) prepared: Option<crate::g2::pv1::doc::Doc>,
+    pub(crate) prepared: Option<crate::g2::quick_look_overlay::doc::Doc>,
     /// The Markdown view the open card shows, taken back on close in place of a second read.
-    lent: Option<(crate::g2::pv1::doc::Doc, Key)>,
+    lent: Option<(crate::g2::quick_look_overlay::doc::Doc, Key)>,
 }
 
 impl Warm {
@@ -48,9 +48,9 @@ impl Warm {
 impl Shell {
     pub(crate) fn sync_quick_look_warm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let side = self.focus_side;
-        for other in 0..2 {
+        for (other, pane) in self.panes.iter_mut().enumerate() {
             if other != side {
-                if let Some(host) = &mut self.panes[other] {
+                if let Some(host) = pane {
                     host.look_warm.key = None;
                     host.look_warm.timer = None;
                     host.look_warm.prepare_timer = None;

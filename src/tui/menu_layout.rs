@@ -98,7 +98,7 @@ pub fn entries(m: &Model, map: &Map) -> Vec<Option<Entry>> {
             let mut share = Vec::new();
             if target {
                 open.push(Entry::new("open", OPEN, tr("menu.open"), wait(Ink::Plain)));
-                if v.apps.as_ref().map_or(true, |apps| !apps.is_empty()) {
+                if v.apps.as_ref().is_none_or(|apps| !apps.is_empty()) {
                     open.push(Entry { chevron: true, ..Entry::new("openwith", WINDOW, tr("menu.openWith"), if one { wait(Ink::Plain) } else { Ink::Dim }) });
                 }
                 if !m.menu_directory && crate::tui::print::offered(m) {
@@ -214,6 +214,7 @@ pub fn draw(out: &mut String, m: &Model, theme: &Theme, map: &Map) {
             None => out.push_str(&format!(" {}{} ", theme.rule, "─".repeat(p.width.saturating_sub(2)))),
             Some(row) => {
                 if index == m.menu_cursor { out.push_str(&theme.tab); }
+                out.push_str(theme.depth.overlay_attribute(index == m.menu_cursor, false));
                 let (mark, ink) = match row.ink {
                     Ink::Plain => (&theme.frame, &theme.foreground), Ink::Dim => (&theme.muted, &theme.muted),
                     Ink::Destructive => (&theme.error, &theme.error), Ink::Unavailable => (&theme.unavailable, &theme.unavailable),

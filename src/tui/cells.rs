@@ -1,8 +1,4 @@
-use super::{
-    icons,
-    model::Row,
-    theme::{Depth, Theme},
-};
+use super::{icons, model::Row, theme::Theme};
 
 pub use crate::cellwidth::width;
 #[cfg(test)]
@@ -11,9 +7,10 @@ use crate::cellwidth::wcwidth;
 pub mod visual;
 
 pub fn mirrors(role: &str) -> bool {
-    static POLICY: std::sync::OnceLock<Option<crate::jsondoc::Json>> = std::sync::OnceLock::new();
+    static POLICY: std::sync::LazyLock<Option<crate::jsondoc::Json>> = std::sync::LazyLock::new(|| {
+        crate::jsondoc::parse(include_str!("../../i18n/rtl-policy.json")).ok()
+    });
     POLICY
-        .get_or_init(|| crate::jsondoc::parse(include_str!("../../i18n/rtl-policy.json")).ok())
         .as_ref()
         .and_then(|doc| doc.get("roles"))
         .and_then(|roles| roles.get(role))
@@ -76,10 +73,9 @@ fn runs_from(policy: &str) -> Option<Runs> {
     })
 }
 pub(super) fn markers(run: Run) -> Option<(char, char)> {
-    static RUNS: std::sync::OnceLock<Option<Runs>> = std::sync::OnceLock::new();
-    let runs = RUNS
-        .get_or_init(|| runs_from(include_str!("../../i18n/rtl-policy.json")))
-        .as_ref()?;
+    static RUNS: std::sync::LazyLock<Option<Runs>> =
+        std::sync::LazyLock::new(|| runs_from(include_str!("../../i18n/rtl-policy.json")));
+    let runs = RUNS.as_ref()?;
     Some(match run {
         Run::Name => runs.name,
         Run::Number => runs.number,
@@ -305,17 +301,13 @@ pub fn row(
     };
     let reset = format!(
         "\x1b[0m{fill}{ink}{}",
-        if style.cursor && theme.depth == Depth::Sixteen {
-            "\x1b[7m"
-        } else {
-            ""
-        }
+        theme.depth.row_attribute(style.cursor, style.marked)
     );
     let mut out = reset.clone();
     if columns == 0 {
         return out;
     }
-    let edge = if style.cursor && style.focused && theme.depth != Depth::Sixteen {
+    let edge = if style.cursor && style.focused && !theme.depth.reverses() {
         format!("{}{}{}", theme.accent, "▎", ink)
     } else {
         " ".into()
@@ -331,7 +323,8 @@ pub fn row(
     let size = size.filter(|s| !s.is_empty() && text_width(s) + 6 <= columns);
     let name_width = columns - 3 - size.map_or(1, |s| text_width(s) + 3);
     // A search result's name is its path under the search; it prints its name, then its folder in the metadata ink.
-    let (folder, leaf) = entry.name.rsplit_once('/').unwrap_or(("", &entry.name));
+    let shown = entry.shown();
+    let (folder, leaf) = shown.rsplit_once('/').unwrap_or(("", &shown));
     let display_name = fit(leaf, text_width(leaf));
     let name = ellipsis(&display_name, text_width(&display_name).min(name_width));
     let target_width = name_width - text_width(&name);

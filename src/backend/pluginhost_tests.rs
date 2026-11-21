@@ -1,5 +1,5 @@
 use flea::jsondoc::{self, Json};
-use flea::ui_logic_st2::wire::{self, Reply};
+use flea::ui_logic_plugin_settings::wire::{self, Reply};
 use std::io::{BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::sync::{mpsc, Arc, Condvar, Mutex};
@@ -144,9 +144,10 @@ fn plugin_host_saturation_refuses_each_request_and_releases_before_terminal_publ
 #[test]
 fn plugin_host_accepts_the_maximum_payload_before_its_framing_newline() {
     let mut payload = r#"{"c":"plugins","op":"list","id":1}"#.to_string();
-    payload.extend(
-        std::iter::repeat(' ').take(flea::plugin_runtime::protocol::MAX_MESSAGE - payload.len()),
-    );
+    payload.extend(std::iter::repeat_n(
+        ' ',
+        flea::plugin_runtime::protocol::MAX_MESSAGE - payload.len(),
+    ));
     payload.push('\n');
     let (sent, received) = mpsc::channel();
     let workers = super::serve(std::io::Cursor::new(payload), Vec::new(), move |line, _| {

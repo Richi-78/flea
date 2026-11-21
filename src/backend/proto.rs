@@ -53,6 +53,7 @@ pub enum Request {
     SearchOpen { path: String, hidden: bool, folder: String },
     SearchQuery { query: String, gen: usize, count: Option<usize>, sizes: Option<usize> },
     SearchClose,
+    SearchRemap { gen: usize, from: usize, rows: Vec<usize>, cursor: usize },
     // cacheOnly answers from the shared cache alone and never starts a decoder, for a
     // storage class whose switch is off; absent is today's full path, see docs/protocol.md "thumb".
     Thumb { rows: Vec<usize>, cache_only: bool, identity: Option<super::thumbreq::identity::Tag> },
@@ -60,8 +61,10 @@ pub enum Request {
     TrashThumb { line: String },
     TrashThumbCancel { ids: Vec<usize> },
     DirSize { rows: Vec<usize> },
-    // Unlike thumbcancel, there is no rows form: it always cancels everything in flight, see docs/protocol.md "dirsizecancel".
-    DirSizeCancel,
+    // Empty rows cancel all unfinished walks; named rows cancel only those viewport exits.
+    DirSizeCancel {
+        rows: Vec<usize>,
+    },
     // The five write operations and their cancel, per the operations design's own wire.
     Transfer { op: String, paths: Vec<String>, rows: Vec<usize>, dest: String, menu_id: usize, shelf: String,
                collide: super::collide::Ask },
@@ -134,8 +137,8 @@ pub enum Request {
     MenuAction { line: String, rows: Vec<usize> },
     // Directive 71: op is "peers" for the flyout's own list and "send" for the transfer it chooses.
     LocalSend { op: String, peer: String, paths: Vec<String>, id: usize },
-    // One AirDrop send to the device named; see docs/protocol.md "airdrop".
-    AirDrop { peer: String, paths: Vec<String>, id: usize },
+    // One AirDrop send to the device named, by service ID, headed by its name; see docs/protocol.md "airdrop".
+    AirDrop { peer: String, name: String, paths: Vec<String>, id: usize },
     Nearby { op: String, id: usize },
     Plugins { line: String },
     NetworkAddress { address: String, id: usize },

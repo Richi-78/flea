@@ -434,7 +434,7 @@ fn a_copy_onto_rclone_says_it_uploads_in_the_background_and_never_claims_the_dri
     let d = TestDir::new("durable-rclone-note");
     let out = d.dir("out");
     let mut durability = Durability { durable: false, rclone: true, file_failed: false, batch_syncfs: false, rename_fat: false, unsettled: false,
-        held: Vec::new(), wave: Wave::default(), touched: std::collections::HashSet::new(), last: None };
+        closes_failed: false, held: Vec::new(), held_bytes: 0, wave: Wave::default(), touched: std::collections::HashSet::new(), last: None };
     let (tx, rx) = channel();
     let done = finish(9, &tx, &mut durability, &out, 1);
     assert!(!done.ok, "an rclone copy never claims the drive confirmed it");
@@ -481,7 +481,7 @@ fn finish_with_nothing_landed_on_rclone_says_nothing() {
     let d = TestDir::new("durable-rclone-empty");
     let out = d.dir("out");
     let mut durability = Durability { durable: false, rclone: true, file_failed: false, batch_syncfs: false, rename_fat: false, unsettled: false,
-        held: Vec::new(), wave: Wave::default(), touched: std::collections::HashSet::new(), last: None };
+        closes_failed: false, held: Vec::new(), held_bytes: 0, wave: Wave::default(), touched: std::collections::HashSet::new(), last: None };
     let (tx, rx) = channel();
     let done = finish(12, &tx, &mut durability, &out, 0);
     assert!(!done.ok, "nothing landed, so nothing is durable");
@@ -613,7 +613,7 @@ fn a_durable_copy_confirms_slices_while_it_writes() {
     let mut p = quiet(&flag, &mut sink, &mut durability);
     crate::backend::copyfile::copy_any(&src, &out.join("big.bin"), &mut p).expect("copy");
     drop(p);
-    let mib = 1024 * 1024 as u64;
+    let mib = 1024 * 1024_u64;
     assert_eq!(seen.len(), 5, "four ramped mids plus the final, got {:?}", seen);
     assert_eq!((seen[0].0, seen[1].0, seen[2].0, seen[3].0), (mib, mib * 3, mib * 7, mib * 15), "the ramped mids, got {:?}", seen);
     assert!(seen.windows(2).all(|w| w[1].0 > w[0].0), "confirmed counts only ever rise, got {:?}", seen);
@@ -693,7 +693,7 @@ fn every_mid_file_report_follows_a_completed_wait() {
     let d = TestDir::new("durable-reports-waits");
     let out = d.dir("out");
     test_mark_durable(&out);
-    let confirm = crate::backend::copyfile::CONFIRM_BYTES as u64;
+    let confirm = crate::backend::copyfile::CONFIRM_BYTES;
     let total: usize = confirm as usize * 3 + 1024 * 1024;
     let src = d.join("big.bin");
     std::fs::write(&src, vec![b'a'; total]).expect("test sandbox file");
@@ -707,7 +707,7 @@ fn every_mid_file_report_follows_a_completed_wait() {
     crate::backend::copyfile::copy_any(&src, &out.join("big.bin"), &mut p).expect("copy");
     drop(p);
     let waits = crate::backend::durable::test_range_waits();
-    let mib = 1024 * 1024 as u64;
+    let mib = 1024 * 1024_u64;
     assert_eq!(waits, 4, "four pipelined waits for five ramp slices, got {}", waits);
     assert_eq!(seen.len(), waits + 1, "mids plus the final, got {:?}", seen);
     assert_eq!((seen[0].0, seen[0].2), (mib, 1), "the first mid follows one wait, got {:?}", seen);
@@ -802,7 +802,7 @@ fn slices_start_with_write_alone_before_the_previous_waits() {
     drop(p);
     let mib: u64 = 1024 * 1024;
     assert_eq!(crate::backend::durable::test_range_log(), vec![
-        format!("write 0"),
+        "write 0".to_string(),
         format!("write {mib}"),
         "wait 0".to_string(),
         format!("write {}", mib * 3),
@@ -1178,7 +1178,7 @@ fn clone_failure_keeps_every_batch_source_drained() {
         std::fs::write(&src, "body").unwrap();
         let source = crate::backend::undo::ItemIdentity::inspect(&src).expect("source recorded");
         let name = src.file_name().unwrap().to_string_lossy().to_string();
-        match crate::backend::movebatch::stage_copy(1, n, &name, &src, &out.join(format!("f{n}.txt")), source, &flag, &tx, &settled, &mut steps, &mut durability, &mut batch) {
+        match crate::backend::movebatch::stage_copy(crate::backend::opsreq::TransferItem { id: 1, index: n, name: &name, src: &src, dst: &out.join(format!("f{n}.txt")), source }, &flag, &tx, &settled, &mut steps, &mut durability, &mut batch) {
             crate::backend::movebatch::MoveOutcome::Deferred => {}
             crate::backend::movebatch::MoveOutcome::Done(r) => panic!("staging copies, got {:?}", r.map(|_| "ok")),
         }
@@ -1227,7 +1227,7 @@ fn clone_syncfs_failure_keeps_every_batch_source() {
         std::fs::write(&src, "body").unwrap();
         let source = crate::backend::undo::ItemIdentity::inspect(&src).expect("source recorded");
         let name = src.file_name().unwrap().to_string_lossy().to_string();
-        match crate::backend::movebatch::stage_copy(1, n, &name, &src, &out.join(format!("f{n}.txt")), source, &flag, &tx, &settled, &mut steps, &mut durability, &mut batch) {
+        match crate::backend::movebatch::stage_copy(crate::backend::opsreq::TransferItem { id: 1, index: n, name: &name, src: &src, dst: &out.join(format!("f{n}.txt")), source }, &flag, &tx, &settled, &mut steps, &mut durability, &mut batch) {
             crate::backend::movebatch::MoveOutcome::Deferred => {}
             crate::backend::movebatch::MoveOutcome::Done(r) => panic!("staging copies, got {:?}", r.map(|_| "ok")),
         }

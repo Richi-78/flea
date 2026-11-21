@@ -1,6 +1,5 @@
 //! Which surface draws a pane's rows, the Grid, the List or the active Columns track, and the rows its last frame drew.
 use crate::columns::{geometry::Slot as Track, TrackRows};
-use crate::list::pane::ROW_HEIGHT;
 use crate::{state::Shell, window::pane::PaneHost, window::startup::View};
 use std::rc::Rc;
 
@@ -12,13 +11,20 @@ pub(super) enum Surface {
     Columns,
 }
 
-// The rows one surface draws: a listing span, and for a List filter its shown rows with the drawn view positions, end exclusive.
+// The rows one surface draws: a listing span, or a filter's shown rows with the drawn view positions, end exclusive.
 pub(crate) struct Want {
     pub span: (usize, usize),
     pub only: Option<(Rc<[usize]>, usize, usize)>,
 }
 
 impl Want {
+    pub(super) fn contains(&self, row: usize) -> bool {
+        match &self.only {
+            Some((shown, first, end)) => shown[*first..*end].contains(&row),
+            None => (self.span.0..=self.span.1).contains(&row),
+        }
+    }
+
     // The listing rows a settle may ask: the span, or a filter's drawn rows only, Filter.cut.
     pub fn rows(&self) -> Vec<usize> {
         match &self.only {
@@ -33,13 +39,14 @@ pub(super) fn drawn_rows(host: &PaneHost, surface: Surface) -> Option<Want> {
     match surface {
         Surface::Grid => {
             let grid = host.grid.as_ref()?;
-            let span = grid
-                .view
-                .wanted_thumbnails(&host.pane, crate::grid::Shown::All(host.pane.held.total))?;
-            Some(Want {
-                span: (*span.start(), *span.end()),
-                only: None,
-            })
+            if !grid.view.visible || host.pane.busy() {
+                return None;
+            }
+            let shown = host.filter.shown.as_ref();
+            let total = shown.map_or(host.pane.held.total, |rows| rows.len());
+            let positions = crate::grid::Shown::All(total);
+            let drawn = grid.view.layout(positions).drawn(grid.view.drawn_scroll());
+            drawn_want(drawn.start, drawn.end, shown)
         }
         Surface::List => list_rows(host),
         Surface::Columns => columns_rows(host),
@@ -48,7 +55,7 @@ pub(super) fn drawn_rows(host: &PaneHost, surface: Surface) -> Option<Want> {
 
 // Before a List or Columns frame has drawn, the pane's own viewport stands in so the settle starts; it asks only drawn rows.
 pub(super) fn estimated_rows(host: &PaneHost) -> Want {
-    let first = (host.pane.scroll_y.max(0.) / ROW_HEIGHT).floor() as usize;
+    let first = (host.pane.scroll_y.max(0.) / host.pane.row_height()).floor() as usize;
     Want {
         span: (first, first + host.pane.visible_rows() - 1),
         only: None,
@@ -104,13 +111,17 @@ fn columns_rows(host: &PaneHost) -> Option<Want> {
     if !matches!(drawn.view().rows, TrackRows::Listing) {
         return None;
     }
-    let height = f32::from(drawn.bounds.size.height);
+    // The track's pitch follows Row density and the text size, never the fixed ROW_HEIGHT (#388).
+    let (height, row) = (f32::from(drawn.bounds.size.height), drawn.row_height);
+    if row <= 0. {
+        return None;
+    }
     let scroll = host.pane.scroll_y.max(0.);
-    let first = (scroll / ROW_HEIGHT).floor() as usize;
+    let first = (scroll / row).floor() as usize;
     // The track draws a standing filter's rows, so its pictures are asked for those rows, as the List's are (SW-14).
-    let shown = drawn.shown.as_ref();
+    let shown = host.filter.shown.as_ref();
     let total = shown.map_or(host.pane.held.total, |rows| rows.len());
-    let end = (((scroll + height) / ROW_HEIGHT).ceil() as usize).min(total);
+    let end = (((scroll + height) / row).ceil() as usize).min(total);
     drawn_want(first, end, shown)
 }
 

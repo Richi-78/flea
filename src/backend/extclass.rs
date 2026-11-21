@@ -184,7 +184,7 @@ pub fn classify_entry(path: &Path, entry: Option<&MountEntry>) -> &'static str {
 // Sample input: (Some("cifs"), None) answers "network" with no statfs of its own.
 pub fn classify_entry_with_magic(path: &Path, entry: Option<&MountEntry>, magic: Option<i64>) -> &'static str {
     let decided = classify_parts(path, entry.map(|e| e.fstype.as_str()), magic, false);
-    if decided != "" {
+    if !decided.is_empty() {
         return decided;
     }
     if usb_for(entry.map(|e| e.majmin.as_str())) {
@@ -207,6 +207,10 @@ fn usb_for(majmin: Option<&str>) -> bool {
         .and_then(|disk| std::fs::read_to_string(Path::new("/sys/block").join(disk).join("removable")).ok());
     is_usb(target.as_deref(), removable.as_deref())
 }
+
+// The wider removable-disk read durable copies take; it never changes the class this file answers.
+#[path = "removable.rs"]
+pub mod removable;
 
 #[cfg(test)]
 #[path = "extclass_tests.rs"]
@@ -317,7 +321,7 @@ mod tests {
         std::os::unix::fs::symlink(&target, &link).unwrap();
         let body = format!("1 0 0:30 / / rw - ext4 /dev/a rw\n30 1 0:9 / {} rw - cifs //nas/media rw\n", target.display());
         assert_eq!(classify_in(&link, &body), "network", "a symlink into a cifs mount is network, not local");
-        let plain = format!("1 0 0:30 / / rw - ext4 /dev/a rw\n");
+        let plain = "1 0 0:30 / / rw - ext4 /dev/a rw\n".to_string();
         assert_eq!(classify_in(&link, &plain), "", "the same link stays local when its target is local");
     }
 

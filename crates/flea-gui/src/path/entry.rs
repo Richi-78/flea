@@ -7,8 +7,11 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 mod ime;
+mod word;
 pub use ime::right_to_left;
 use ime::{binds, extends};
+#[cfg(test)]
+pub(crate) mod navigation_cases;
 #[cfg(test)]
 mod tests;
 

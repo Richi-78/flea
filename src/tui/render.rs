@@ -17,8 +17,15 @@ pub fn bytes(n: usize) -> String { crate::i18n::Locale::default().format_size(n 
 pub fn items(n: usize) -> String { super::words::items(&crate::i18n::test_catalogs::english(), n) }
 #[cfg(test)]
 pub fn grouped(n: usize) -> String { crate::i18n::Locale::default().format_count(n.min(i64::MAX as usize) as i64) }
-pub fn draw(m: &Model, theme: &Theme, map: &Map, columns: usize, lines: usize,
-    _cell_pixels: Option<(usize, usize)>, elapsed: std::time::Duration, last: &mut String) -> io::Result<bool> {
+// The terminal's size in cells.
+pub struct TerminalSize {
+    pub columns: usize,
+    pub lines: usize,
+}
+
+pub fn draw(m: &Model, theme: &Theme, map: &Map, size: TerminalSize, elapsed: std::time::Duration,
+    last: &mut String) -> io::Result<bool> {
+    let TerminalSize { columns, lines } = size;
     if m.find.waiting || m.find.cancelling { return Ok(false); }
     let out = super::look::frame(m, theme, map, columns, lines, elapsed);
     present(out, last, &mut io::stdout().lock())
@@ -107,7 +114,7 @@ fn contents_line(m: &Model, index: usize, columns: usize, style: RowStyle, theme
     let Some(hit) = m.find.matches.get(&index) else { return fit("", columns); };
     let fill = if style.cursor { if style.focused { &theme.cursor } else { &theme.selected } }
         else if style.marked { &theme.marked } else { &theme.background };
-    let reset = format!("\x1b[0m{fill}{}{}", theme.meta, if style.cursor && theme.depth == super::theme::Depth::Sixteen { "\x1b[7m" } else { "" });
+    let reset = format!("\x1b[0m{fill}{}{}", theme.meta, theme.depth.row_attribute(style.cursor, style.marked));
     let number = m.prompts.i18n.locale().format_count(hit.line_no as i64);
     let gutter = contents_gutter(m).min(columns);
     let prefix = format!("{}{} ", " ".repeat(gutter.saturating_sub(text_width(&number) + 1)), number);
@@ -159,3 +166,7 @@ pub(crate) mod frame_tests;
 #[cfg(test)]
 #[path = "jobrender_tests.rs"]
 mod jobrender_tests;
+
+#[cfg(test)]
+#[path = "terminal_size_tests.rs"]
+mod terminal_size_tests;

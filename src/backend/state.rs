@@ -65,6 +65,7 @@ pub struct State {
     pub search: Option<Search>,
     // The live search session; a list, sort or close drops it and frees its arena.
     pub search_session: Option<Session>,
+    pub(crate) search_remap: super::searchremap::Remap,
     // When the running walk last announced its count, so SEARCH_REPORT can throttle the stream.
     pub search_reported: Instant,
     // Which numbering the rows are in; forget_rows moves it, see src/backend/rowguard.rs.
@@ -82,7 +83,7 @@ impl Tables {
         if metas.is_empty() {
             return super::rows::empty_line(start, ms);
         }
-        super::rows::rows_line(base, listing, metas, start, ms, &self.mime, &self.icons, &self.aliases, &self.thumbs, &mut self.kinds.borrow_mut())
+        super::rows::rows_line(base, listing, metas, crate::backend::rows::Window { start, ms }, crate::backend::rows::Services { mime: &self.mime, icons: &self.icons, aliases: &self.aliases, thumbs: &self.thumbs, kinds: &mut self.kinds.borrow_mut() })
     }
 
     pub fn load() -> Tables {
@@ -118,6 +119,7 @@ impl State {
             settled: Default::default(),
             search: None, search_reported: Instant::now(), generation: FIRST_LISTING - 1, held: Held::List,
             search_session: None,
+            search_remap: Default::default(),
             clip_watching: false,
             nearby: Default::default(),
         }

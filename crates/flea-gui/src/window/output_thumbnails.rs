@@ -1,6 +1,6 @@
 //! The Combine card borrows the captured selection's held pictures, including late viewport answers.
 use crate::{
-    g2::op4::{model::Card, seam::Thumbnail},
+    g2::print_convert::{model::Card, seam::Thumbnail},
     state::Shell,
 };
 use gpui::Context;
@@ -31,7 +31,7 @@ impl Shell {
                     Path::new(&host.path).join(&row.name) == Path::new(&source.path)
                 })?;
                 let row = &host.pane.held.rows[index];
-                let picture = list.pictures.lend(host.pane.held.start + index, row)?;
+                let picture = list.pictures.lend(host.pane.held.index_at(index), row)?;
                 Some(Thumbnail {
                     path: source.path.clone(),
                     size: picture.decoded(),

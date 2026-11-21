@@ -15,11 +15,10 @@ use crate::{
 };
 use gpui::{Context, FocusHandle, SharedString, Task, Window};
 
-const FALLBACK_HEADER_HEIGHT: f32 = 27.;
-
 pub struct Shell {
     pub(crate) capture: crate::capture::Capture,
     pub(crate) visual: crate::visual::Visual,
+    pub(crate) name_tip: crate::name_tip::Owner,
     pub(crate) presentation: crate::window::frame_feedback::Presentation,
     pub launch: Launch,
     pub slots: Slots,
@@ -38,18 +37,18 @@ pub struct Shell {
     pub(crate) panes: [Option<PaneHost>; 2],
     pub(crate) surfaces: [crate::window::surfaces::Surfaces; 2],
     pub(crate) settings: crate::window::settings::Host,
-    pub(crate) menu: crate::g2::mn1::join::Joined,
+    pub(crate) menu: crate::g2::context_menus::join::Joined,
     pub(crate) plugins: crate::g2::plugins::Join,
     pub(crate) user_keys: crate::window::user_keys::Join,
-    pub(crate) operations: crate::g2::op1::join::Sessions,
+    pub(crate) operations: crate::g2::file_ops::join::Sessions,
     pub(crate) rename: crate::window::rename::Join,
     pub(crate) properties: Option<crate::window::properties::Open>,
-    pub(crate) clipboard: crate::g2::dg1::join::Joined,
-    pub(crate) overlay: Option<gpui::Entity<crate::g2::op1::host::Overlay>>,
+    pub(crate) clipboard: crate::g2::file_clipboard::join::Joined,
+    pub(crate) overlay: Option<gpui::Entity<crate::g2::file_ops::host::Overlay>>,
     pub(crate) quick_look: Option<crate::window::quick_look::Host>,
     pub(crate) output: crate::window::output::Join,
     pub(crate) permissions: crate::window::permissions::Join,
-    pub(crate) trash: Option<crate::g2::pl3::join::TrashHost>,
+    pub(crate) trash: Option<crate::g2::trash_browser::join::TrashHost>,
     pub(crate) rail: Option<crate::window::rail::Join>,
     /// Live compositor rounding, square until it is readable; visual scenes can override it.
     pub(crate) corner: f32,
@@ -68,7 +67,7 @@ pub struct Shell {
     pub(crate) _presentation_reader: Option<Task<()>>,
     pub(crate) font_key: Option<(
         crate::presentation::Fonts,
-        flea::ui_logic_st1::textsize::Stored,
+        flea::ui_logic_settings_pages::textsize::Stored,
     )>,
     _app_quit: Option<gpui::Subscription>,
     pub(crate) dual_focus: crate::dual::focus::Focus,
@@ -119,6 +118,7 @@ impl Shell {
         let mut shell = Self {
             capture,
             visual: crate::visual::Visual::default(),
+            name_tip: Default::default(),
             presentation: Default::default(),
             strip: crate::tabs::host::Host::new(&launch.settings, &launch.paths[focus_side]),
             launch,
@@ -149,7 +149,7 @@ impl Shell {
             settings: Default::default(),
             trash: None,
             rail: None,
-            corner: crate::g2::st1::seams::COMPOSITOR_CORNER_DEFAULT,
+            corner: crate::g2::settings_pages::seams::COMPOSITOR_CORNER_DEFAULT,
             slots: Slots::default(),
             chrome: Default::default(),
             chrome_move: Default::default(),
@@ -274,9 +274,10 @@ impl Shell {
                     }
                 }));
                 // Each backend watches the clipboard from its start, as Backend.qml does.
-                self.clipboard
-                    .board
-                    .watch(side as u64, &crate::g2::dg1::join::PaneWire(Some(&backend)));
+                self.clipboard.board.watch(
+                    side as u64,
+                    &crate::g2::file_clipboard::join::PaneWire(Some(&backend)),
+                );
                 host.backend = Some(backend);
             }
             Err(error) => {

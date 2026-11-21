@@ -5,6 +5,8 @@
 # A still listing reads the same twice in a row: up to 40 reads, with a 50 ms sleep after each.
 rename_design_still_polls=40
 rename_design_still_s=0.05
+# The GUI re-reads a changed folder 400 ms (WATCH_MS) after the change, so a held re-read is checked after twice that.
+rename_design_watch_s=0.8
 
 rename_design_draft() {
     local draft="$1"
@@ -132,8 +134,6 @@ rename_design_backend_loss() {
     menus_shot "rename-$mode-backend-recovered"
 }
 
-case_renamelife() { case_renamedesign life; }
-
 case_renamedesign() (
     local menu_box menu_dir menus_checks=0 mode path draft before wx wy ww wh cx cy index
     local proof="${1:-design}" permissions_listing rename_stopped=""
@@ -224,26 +224,39 @@ case_renamedesign() (
         menus_expect renameState '.index == -1 and (.loading | not) and .cursorName == "a-original.md"' "$mode pointer menu restores original name through same editor"
 
         rename_design_open r a-original.md
+        local replacement_requests
+        replacement_requests=$(ipc listRequests)
+        [[ "$replacement_requests" =~ ^[0-9]+$ ]] || fail "rename: listRequests read [$replacement_requests] before the replacement"
         menus_guard "$menu_dir/a-original.md"
         menus_guard "$menu_box/retained-$mode.md"
         mv -- "$menu_dir/a-original.md" "$menu_box/retained-$mode.md" || fail 'rename: identity replacement setup failed'
         menus_guard "$menu_dir/a-original.md"
         printf 'replacement bytes\n' > "$menu_dir/a-original.md"
+        local replacement_identity
+        replacement_identity=$(stat -c '%d:%i' "$menu_dir/a-original.md")
         rename_design_draft a-replaced.md
-        rename_design_refusal a-replaced.md 'Selected item changed' "$mode keyboard rename refuses replaced source identity"
+        rename_design_refusal a-replaced.md 'Item changed; reopen Rename.' "$mode keyboard rename refuses replaced source identity"
         [[ ! -e "$menu_dir/a-replaced.md" ]] || fail 'rename: changed source was renamed'
         menus_equal "$mode stale refusal preserves original" 'original bytes' "$(cat "$menu_box/retained-$mode.md")"
         menus_equal "$mode stale refusal preserves replacement" 'replacement bytes' "$(cat "$menu_dir/a-original.md")"
+        menus_equal "$mode stale refusal preserves replacement inode" "$replacement_identity" "$(stat -c '%d:%i' "$menu_dir/a-original.md")"
         menus_shot "rename-$mode-stale"
+        sleep "$rename_design_watch_s"
+        menus_equal "$mode replacement is not re-listed behind the open editor" "$replacement_requests" "$(ipc listRequests)"
         key -k Escape >/dev/null
         menus_expect renameState '.index == -1' "$mode stale editor dismisses"
+        menus_relisted "$replacement_requests" "$mode stale editor releases the replacement re-read"
         rename_design_open F2 a-original.md
         rename_design_draft a-replaced.md
+        menus_guard "$menu_box/roundtrip-$mode.md"
+        mv -- "$menu_dir/a-original.md" "$menu_box/roundtrip-$mode.md" || fail 'rename: same-inode move out failed'
+        mv -- "$menu_box/roundtrip-$mode.md" "$menu_dir/a-original.md" || fail 'rename: same-inode move back failed'
         menus_guard "$menu_dir/a-original.md"
         menus_guard "$menu_dir/a-replaced.md"
         key -k Return >/dev/null
         menus_expect renameState '.index == -1 and (.loading | not) and .cursorName == "a-replaced.md"' "$mode fresh entry captures replacement identity"
         menus_equal "$mode fresh rename preserves replacement bytes" 'replacement bytes' "$(cat "$menu_dir/a-replaced.md")"
+        menus_equal "$mode fresh rename preserves the moved-back inode" "$replacement_identity" "$(stat -c '%d:%i' "$menu_dir/a-replaced.md")"
         menus_guard "$menu_dir/a-replaced.md"
         menus_guard "$menu_box/accepted-$mode.md"
         mv -- "$menu_dir/a-replaced.md" "$menu_box/accepted-$mode.md" || fail 'rename: completed fixture retirement failed'
@@ -277,7 +290,7 @@ case_renamedesign() (
         rename_design_open F2 f1199.txt
         rename_design_draft b-existing.md
         rename_design_refusal b-existing.md 'already exists' "$mode bottom-row refusal retains the draft"
-        menus_expect renameState '.editorTop >= 0 and .editorBottom <= .viewportHeight' "$mode expanded bottom editor remains entirely within its viewport"
+        menus_expect renameState '.editorTop >= 0 and .errorBottom > .editorBottom and .errorBottom <= .viewportHeight' "$mode expanded bottom row and refusal remain entirely within its viewport"
         menus_shot "rename-$mode-bottom-error"
         key -k Escape -k Home >/dev/null
         menus_expect renameState '.index == -1 and .cursor == 0' "$mode bottom editor dismissal restores navigation"

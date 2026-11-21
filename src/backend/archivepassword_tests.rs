@@ -67,8 +67,17 @@ fn extract_password_round_trip(encrypt_names: bool) {
         std::fs::read_to_string(dest.join("notes.txt")).unwrap(),
         "encrypted notes\n"
     );
-    let error = extract(&formats, &archive, &dest, &cancel, Some(PASSWORD)).unwrap_err();
-    assert_eq!(error.msg, "that destination already exists");
+    // A second extract lands beside the first, never into it (soak S1B-3).
+    assert!(extract(&formats, &archive, &dest, &cancel, Some(PASSWORD)).unwrap());
+    let beside = dest.with_file_name(format!(
+        "{} copy",
+        dest.file_name().unwrap().to_string_lossy()
+    ));
+    assert_eq!(
+        std::fs::read_to_string(beside.join("notes.txt")).unwrap(),
+        "encrypted notes\n"
+    );
+    assert_eq!(std::fs::read_dir(&dest).unwrap().count(), 1);
 }
 
 #[test]
@@ -137,13 +146,16 @@ fn fix_7zpass_menu_extract_uses_cursor_archive_and_reaches_password_gate() {
         &mut ops,
         Arc::new(Formats::from_tools(true, true)),
         "extract",
-        Vec::new(),
-        String::new(),
-        archive.clone(),
-        dest.clone(),
+        crate::backend::archivereq::ArchiveRequest {
+            compressing: false,
+            paths: Vec::new(),
+            format: String::new(),
+            archive: archive.clone(),
+            dest: dest.clone(),
+            password: String::new(),
+            encrypt_names: false,
+        },
         17,
-        String::new(),
-        false,
     );
     while !String::from_utf8_lossy(&out).contains(r#""t":"archivedone""#) {
         opsdispatch::report_op(

@@ -12,9 +12,9 @@ pub(crate) const PREFIX: &str = ".flea-part-";
 // FUSE_SUPER_MAGIC: a daemon's rename may be refused, copied on the device or re-uploaded, so FUSE writes in place.
 const FUSE_MAGIC: i64 = 0x65735546;
 // An inode with no name until linkat gives it one, so a kill or a crash leaves nothing behind.
-const O_TMPFILE: i32 = 0o20000000 | crate::oflags::O_DIRECTORY;
+pub(super) const O_TMPFILE: i32 = 0o20000000 | crate::oflags::O_DIRECTORY;
 // What a filesystem without O_TMPFILE answers: EOPNOTSUPP, or EISDIR and EINVAL from a kernel older than the flag.
-const NO_TMPFILE: [i32; 3] = [95, 21, 22];
+pub(super) const NO_TMPFILE: [i32; 3] = [95, 21, 22];
 const AT_FDCWD: i32 = -100;
 const AT_SYMLINK_FOLLOW: i32 = 0x400;
 // A stale sibling at the next name (a dead process that had this pid) is passed over, a few times at most.
@@ -188,12 +188,12 @@ fn leaf(seq: u64) -> String {
 
 // Sample input: "3f2a9c1e-5b7d-4c1a-9e2f-0a1b2c3d4e5f\n" gives "3f2a9c1e"; a box without one still names its files uniquely by pid.
 pub(crate) fn boot() -> &'static str {
-    static BOOT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    BOOT.get_or_init(|| {
+    static BOOT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
         let id = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap_or_default();
         let hex: String = id.chars().filter(char::is_ascii_hexdigit).take(8).collect();
         if hex.len() == 8 { hex.to_ascii_lowercase() } else { "00000000".to_string() }
-    })
+    });
+    &BOOT
 }
 
 fn failed_publish() -> Option<io::Error> {

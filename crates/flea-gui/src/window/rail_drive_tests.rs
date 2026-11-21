@@ -50,7 +50,7 @@ fn root_devices<'a>(
             },
             monitor: None,
         });
-        cx.set_global(crate::g2::pl1::source::fixture::Services {
+        cx.set_global(crate::g2::device_rail::source::fixture::Services {
             runner,
             hostname: "minipc\n".into(),
         });
@@ -76,8 +76,13 @@ fn root_devices<'a>(
         shell: cx.new(|cx| Shell::new(launch, locale, events, window, cx)),
     });
     let shell = root.read_with(cx, |root, _| root.shell.clone());
+    cx.update(|window, _| window.activate_window());
     cx.update(|window, cx| shell.update(cx, |shell, cx| window.focus(&shell.focus, cx)));
     cx.run_until_parked();
+    assert!(
+        cx.update(|window, _| window.is_window_active()),
+        "drive frame fixture must be active before timed work"
+    );
     service.answer("lsblk", 0, blocks);
     service.answer("gio", 0, phone);
     frame(cx);
@@ -93,9 +98,11 @@ fn root_devices<'a>(
     (shell, service, cx)
 }
 
+const NATIVE_FRAMES: u64 = 3;
+
 // Only the native frame callback draws, and it draws only a window something marked dirty.
 fn native_frames(cx: &mut VisualTestContext) {
-    for _ in 0..3 {
+    for _ in 0..NATIVE_FRAMES {
         cx.run_until_parked();
         cx.simulate_frame_request(RequestFrameOptions::default());
     }
@@ -106,7 +113,7 @@ fn native_frames(cx: &mut VisualTestContext) {
 fn walk_to_stick(
     shell: &Entity<Shell>,
     cx: &mut VisualTestContext,
-) -> crate::g2::pl4::rows::LaidRow {
+) -> crate::g2::rail_places::rows::LaidRow {
     walk_to(shell, "128GB", cx)
 }
 
@@ -115,7 +122,7 @@ fn walk_to(
     shell: &Entity<Shell>,
     label: &str,
     cx: &mut VisualTestContext,
-) -> crate::g2::pl4::rows::LaidRow {
+) -> crate::g2::rail_places::rows::LaidRow {
     cx.simulate_keystrokes("tab");
     frame(cx);
     let producer = producer(shell, cx);
@@ -188,7 +195,7 @@ fn raildrive_menu_key_on_a_mounted_stick_paints_the_device_menu(cx: &mut TestApp
     cx.update(|cx| cx.set_reduce_motion(true));
     let (shell, _service, cx) = root_at(cx);
     let stick = walk_to_stick(&shell, cx);
-    crate::g2::mn1::element::PAINTED.with(|painted| painted.borrow_mut().clear());
+    crate::g2::context_menus::element::PAINTED.with(|painted| painted.borrow_mut().clear());
     cx.simulate_keystrokes("m");
     native_frames(cx);
     assert_eq!(
@@ -196,7 +203,8 @@ fn raildrive_menu_key_on_a_mounted_stick_paints_the_device_menu(cx: &mut TestApp
         ["open", "unmountVolume", "eject", "flashImage"],
         "rail-menu-device rows"
     );
-    let painted = crate::g2::mn1::element::PAINTED.with(|painted| painted.borrow().clone());
+    let painted =
+        crate::g2::context_menus::element::PAINTED.with(|painted| painted.borrow().clone());
     let frame = painted
         .last()
         .expect("the device menu is painted in a native frame");
@@ -235,6 +243,9 @@ fn raildrive_device_menu_eject_runs_on_the_stick(cx: &mut TestAppContext) {
 
 #[path = "rail_drive_menu_tests.rs"]
 mod menu;
+
+#[path = "rail_inactive_tests.rs"]
+mod inactive;
 
 #[path = "rail_drive_rows_tests.rs"]
 mod rows;

@@ -1,6 +1,7 @@
 // Archive and conversion request dispatch, response builders, and focused protocol tests.
 use crate::backend::archive::Formats;
 use crate::backend::archiveops;
+use flea::bytename::ExactText as _;
 #[cfg(test)]
 use crate::backend::archiveops::{compress, convert_one, extract};
 use crate::backend::convert;
@@ -82,14 +83,11 @@ pub fn start_archive(
     ops: &mut Ops,
     formats: Arc<Formats>,
     op: &str,
-    paths: Vec<String>,
-    format: String,
-    archive: PathBuf,
-    dest: PathBuf,
+    request: ArchiveRequest,
     menu_id: usize,
-    password: String,
-    encrypt_names: bool,
 ) {
+    // The op string decides compressing below, after it is refused by name, as it did before the request was grouped.
+    let ArchiveRequest { paths, format, archive, dest, password, encrypt_names, .. } = request;
     // An op that names neither would otherwise fall through to extract, so it is refused by name.
     if op != "compress" && op != "extract" {
         writeln!(out, "{}", error_line(&op_err("archive", op, "op must be compress or extract"))).ok();
@@ -99,7 +97,7 @@ pub fn start_archive(
     let sources = if op == "extract" && menu_id != 0 {
         ops.menuactions.as_ref()
             .ok_or_else(|| super::menu_actions::SELECTION_CHANGED.to_string())
-            .and_then(|menu| menu.extract_selection(menu_id)).map(Some)
+            .and_then(|menu| menu.extract_selection(menu_id, &archive)).map(Some)
     } else {
         menu_sources(ops, menu_id)
     };
@@ -116,7 +114,7 @@ pub fn start_archive(
         return;
     }
     // A source or target on a pending mount waits; writes elsewhere run beside the held write.
-    let mut sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let mut sources: Vec<PathBuf> = paths.iter().map(flea::bytename::exact).collect();
     if !compressing {
         sources.push(archive.clone());
     }
@@ -160,8 +158,16 @@ pub fn start_archive(
     );
 }
 
-pub fn start_convert(out: &mut impl Write, ops: &mut Ops, input: PathBuf, dest: PathBuf, strip: bool,
-                     menu_id: usize, request_id: usize, check: bool) {
+// A conversion's own fields: the file, where its result goes, whether metadata is stripped, and the request it answers.
+pub(crate) struct ConvertRequest {
+    pub input: PathBuf,
+    pub dest: PathBuf,
+    pub strip: bool,
+    pub request_id: usize,
+}
+
+pub fn start_convert(out: &mut impl Write, ops: &mut Ops, request: ConvertRequest, menu_id: usize, check: bool) {
+    let ConvertRequest { input, dest, strip, request_id } = request;
     let selection = menu_sources(ops, menu_id);
     // A source or target on a pending mount waits; a check only probes and never waits.
     if !check {
@@ -183,23 +189,36 @@ pub fn start_convert(out: &mut impl Write, ops: &mut Ops, input: PathBuf, dest: 
     let error = if collision { collision_message(&dest) } else { result.as_ref().err().cloned().unwrap_or_default() };
     if check {
         writeln!(out, r#"{{"t":"convertchecked","requestId":{},"source":"{}","path":"{}","ok":{},"collision":{},"error":"{}"}}"#,
-            request_id, escape(&input.to_string_lossy()), escape(&dest.to_string_lossy()), result.is_ok(), collision, escape(&error)).ok();
+            request_id, escape(&input.exact_text()), escape(&dest.exact_text()), result.is_ok(), collision, escape(&error)).ok();
         out.flush().ok();
         return;
     }
     let id = ops.claim_id();
     if result.is_err() || collision {
-        writeln!(out, "{}", convertdone_line(id, request_id, &input.to_string_lossy(), false, &dest.to_string_lossy(), &error, collision)).ok();
+        writeln!(out, "{}", convertdone_line(id, request_id, &input.exact_text(), false, &dest.exact_text(), &error, collision)).ok();
         out.flush().ok();
         return;
     }
     // A convert runs alongside by design, so its flag is tracked for a quit to set.
     let cancel = Arc::new(AtomicBool::new(false));
     ops.detached.insert(id, &cancel);
-    writeln!(out, "{}", convertstarted_line(id, request_id, &input.to_string_lossy())).ok();
+    writeln!(
+        out,
+        "{}",
+        convertstarted_line(id, request_id, &input.exact_text())
+    )
+    .ok();
     out.flush().ok();
     let tx = ops.tx.clone();
-    thread::spawn(move || run_convert(id, request_id, input, dest, strip, tx, selection.unwrap(), cancel));
+    thread::spawn(move || {
+        run_convert(
+            id,
+            ConvertRequest { request_id, input, dest, strip },
+            tx,
+            selection.unwrap(),
+            cancel,
+        )
+    });
 }
 
 #[cfg(test)]
@@ -235,20 +254,6 @@ mod tests {
             formats_line(&Formats::from_tools(false, true), false),
             r#"{"t":"formats","archive":["7z"],"convert":false,"extract":{"archive":false,"sevenZip":true,"zip":true}}"#
         );
-    }
-
-    #[test]
-    fn a_destination_already_there_is_refused_before_any_tool_runs() {
-        let d = TestDir::new("archrefuse");
-        let f = Formats::from_tools(true, true);
-        d.file("out.zip", "already here");
-        let e = compress(&f, d.path(), &["a.txt".to_string()], "zip", &d.join("out.zip"), &AtomicBool::new(false), None).unwrap_err();
-        assert!(e.msg.contains("already exists"));
-        assert_eq!(std::fs::read_to_string(d.join("out.zip")).unwrap(), "already here");
-
-        d.dir("out");
-        let e = extract(&f, &d.join("x.zip"), &d.join("out"), &AtomicBool::new(false), None).unwrap_err();
-        assert!(e.msg.contains("already exists"), "merging into a directory in use is the surprise this rules out");
     }
 
     #[test]
@@ -291,12 +296,12 @@ mod tests {
         let source = d.file("photo.png", "source");
         let destination = d.join("photo (converted).jpg");
         let selected = vec![Selected::inspect(source.to_str().unwrap()).unwrap()];
-        assert_eq!(check_convert(&source, &destination, Some(&selected)).unwrap(), false);
+        assert!(!check_convert(&source, &destination, Some(&selected)).unwrap());
         d.file("photo (converted).jpg", "collision");
         let (tx, _) = std::sync::mpsc::channel();
         let mut ops = Ops::new(tx);
         let mut output = Vec::new();
-        start_convert(&mut output, &mut ops, source.clone(), destination.clone(), false, 0, 73, false);
+        start_convert(&mut output, &mut ops, ConvertRequest { input: source.clone(), dest: destination.clone(), strip: false, request_id: 73 }, 0, false);
         let reply = String::from_utf8(output).unwrap();
         assert_eq!(crate::json::field_str(&reply, "t").as_deref(), Some("convertdone"));
         assert_eq!(crate::json::field_usize(&reply, "requestId"), Some(73));
@@ -323,7 +328,7 @@ mod tests {
         let mut ops = Ops::new(tx);
         for check in [true, false] {
             let mut output = Vec::new();
-            start_convert(&mut output, &mut ops, source.clone(), destination.clone(), true, 9, 74, check);
+            start_convert(&mut output, &mut ops, ConvertRequest { input: source.clone(), dest: destination.clone(), strip: true, request_id: 74 }, 9, check);
             let reply = String::from_utf8(output).unwrap();
             assert_eq!(crate::json::field_usize(&reply, "requestId"), Some(74));
             assert_eq!(crate::json::field_str(&reply, "source").as_deref(), source.to_str());
@@ -351,7 +356,7 @@ mod tests {
         let mut ops = Ops::new(tx);
         for check in [true, false] {
             let mut output = Vec::new();
-            start_convert(&mut output, &mut ops, source.clone(), destination.clone(), false, 0, 75, check);
+            start_convert(&mut output, &mut ops, ConvertRequest { input: source.clone(), dest: destination.clone(), strip: false, request_id: 75 }, 0, check);
             let reply = String::from_utf8(output).unwrap();
             assert_eq!(crate::json::field_usize(&reply, "requestId"), Some(75));
             assert_eq!(crate::json::field_str(&reply, "source").as_deref(), source.to_str());

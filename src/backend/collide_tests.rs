@@ -89,7 +89,7 @@ pub(crate) fn chosen(word: &str, question: Question, dest: &Path) -> Policy {
 // Runs one transfer on this thread and answers its counts, the per-item errors and the journal entry.
 pub(crate) fn transfer(moving: bool, paths: &[&Path], dest: &Path, policy: Policy) -> (usize, usize, usize, Vec<String>, Entry) {
     let (tx, rx) = channel();
-    run_transfer_checked(1, moving, owned(paths), dest.to_path_buf(), Arc::new(AtomicBool::new(false)), tx, None, None, policy);
+    run_transfer_checked(1, moving, owned(paths), dest.to_path_buf(), Arc::new(AtomicBool::new(false)), tx, crate::backend::opsreq::TransferChecks { selection: None, destination: None, collision: policy });
     let mut errors = Vec::new();
     for msg in rx.iter() {
         match msg {
@@ -389,3 +389,5 @@ fn a_folder_resolved_once_decides_every_source_in_it_like_a_fresh_resolve() {
 mod fat_tests;
 #[path = "collide_table_tests.rs"]
 mod table_tests;
+#[path = "collide_twins_tests.rs"]
+mod twins_tests;

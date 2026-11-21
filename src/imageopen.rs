@@ -1,6 +1,6 @@
 // The image gallery's default-handler capability and shared argv bound, never a viewer choice.
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 pub const MAX_IMAGES: usize = 4096;
@@ -110,11 +110,11 @@ pub fn takes_many(exec: &str) -> bool {
                 let before = exec[..at]
                     .chars()
                     .next_back()
-                    .map_or(true, char::is_whitespace);
+                    .is_none_or(char::is_whitespace);
                 let after = exec[end + 1..]
                     .chars()
                     .next()
-                    .map_or(true, char::is_whitespace);
+                    .is_none_or(char::is_whitespace);
                 if quoted || !before || !after {
                     return false;
                 }
@@ -153,7 +153,7 @@ pub fn launcher(target: &Path, paths: &[String]) -> Option<Command> {
         let path = if index == 0 {
             target.to_path_buf()
         } else {
-            PathBuf::from(path)
+            flea::bytename::exact(path)
         };
         if !path.is_absolute() || path.as_os_str().as_bytes().contains(&0) {
             return None;

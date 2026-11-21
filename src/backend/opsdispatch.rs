@@ -10,6 +10,7 @@ use crate::backend::listing::Listing;
 use crate::backend::proto::error_line;
 use crate::backend::undo::{Entry, ItemIdentity, Journal, Step};
 use crate::error::FleaError;
+use flea::bytename::ExactText as _;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -124,12 +125,12 @@ pub(crate) fn resolve_rows(paths: Vec<String>, rows: &[usize], base: &Path, list
     }
     rows.iter()
         .filter(|&&r| r < listing.len())
-        .map(|&r| base.join(listing.name(r)).to_string_lossy().to_string())
+        .map(|&r| flea::bytename::path_text(&listing.path(base, r)).into_owned())
         .collect()
 }
 
 pub(crate) fn start_transfer(out: &mut impl Write, ops: &mut Ops, op: &str, paths: Vec<String>, dest: &str, collide: super::collide::Ask) {
-    start_transfer_checked(out, ops, op, paths, dest, None, None, collide)
+    start_transfer_checked(out, ops, op, paths, dest, crate::backend::opsreq::TransferChecks { selection: None, destination: None, collision: collide })
 }
 
 pub(crate) fn request_menu_action(out: &mut impl Write, ops: &mut Ops, line: String, paths: Vec<String>, cursor: Option<String>) {
@@ -155,8 +156,8 @@ pub(crate) fn request_menu_action(out: &mut impl Write, ops: &mut Ops, line: Str
 pub(crate) fn start_menu_transfer(out: &mut impl Write, ops: &mut Ops, op: &str, id: usize, dest: &str, collide: super::collide::Ask) {
     match super::collide::menu_sources(ops, id, dest, &collide) {
         Ok((items, destination)) => {
-            let paths = items.iter().map(|item| item.path.to_string_lossy().into()).collect();
-            start_transfer_checked(out, ops, op, paths, dest, Some(items), destination, collide);
+            let paths = items.iter().map(|item| item.path.exact_text().into()).collect();
+            start_transfer_checked(out, ops, op, paths, dest, crate::backend::opsreq::TransferChecks { selection: Some(items), destination, collision: collide });
         }
         Err(message) => {
             writeln!(out, "{}", error_line(&op_err("transfer", "", &message))).ok();
@@ -178,7 +179,7 @@ pub(crate) fn cancel_transfer(out: &mut impl Write, ops: &mut Ops, id: usize) {
 // One gate for every write: each resolved source and the destination wait while their mount holds a slow write.
 pub(crate) fn pending_on_any(ops: &Ops, sources: &[PathBuf], dests: &[PathBuf]) -> bool {
     let body = if ops.pending.is_empty() { return false } else { mount_body() };
-    sources.iter().chain(dests.iter()).any(|p| pending_on(ops, &body, &p.to_string_lossy()))
+    sources.iter().chain(dests.iter()).any(|p| pending_on(ops, &body, &p.exact_text()))
 }
 
 // Same gate with the standard refusal, so the slot-taking writes share one answering line.
@@ -191,7 +192,7 @@ pub(crate) fn pending_busy_for(out: &mut impl Write, ops: &Ops, where_: &str, so
 }
 // A path whose mount holds a pending slow write waits, so the late journal lands first.
 pub(crate) fn pending_on(ops: &Ops, body: &str, path: &str) -> bool {
-    let key = mount_key(Path::new(path), body);
+    let key = mount_key(&flea::bytename::view(path), body);
     ops.pending.iter().any(|held| held.mount == key)
 }
 
@@ -209,9 +210,9 @@ fn pending_busy(out: &mut impl Write, ops: &Ops, where_: &str) -> bool {
 
 // A delete names its targets by snapshot, so with no paths to check any pending write blocks it.
 fn delete_blocked(ops: &Ops, paths: &[String], cursor: Option<&str>, selection: Option<&[super::menu_actions::Selected]>) -> bool {
-    let mut sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let mut sources: Vec<PathBuf> = paths.iter().map(flea::bytename::exact).collect();
     if let Some(at) = cursor {
-        sources.push(PathBuf::from(at));
+        sources.push(flea::bytename::exact(at));
     }
     if let Some(items) = selection {
         sources.extend(items.iter().map(|item| item.path.clone()));
@@ -243,7 +244,7 @@ pub(crate) fn start_trash(out: &mut impl Write, ops: &mut Ops, paths: Vec<String
         Err(message) => { writeln!(out, "{}", error_line(&op_err("trash", "", &message))).ok(); out.flush().ok(); return; }
     };
     // A path on a pending mount waits; writes elsewhere run beside the held write.
-    let mut sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let mut sources: Vec<PathBuf> = paths.iter().map(flea::bytename::exact).collect();
     if let Some(items) = &selection {
         sources.extend(items.iter().map(|item| item.path.clone()));
     }
@@ -261,43 +262,16 @@ pub(crate) fn start_duplicate(out: &mut impl Write, ops: &mut Ops, path: &str, m
     created_request::duplicate(out, ops, path, menu_id, 0);
 }
 
-// A menu rename captures the selected identity before its worker outlives the menu and listing.
-pub(crate) fn do_menu_rename(out: &mut impl Write, ops: &mut Ops, path: &str, to: &str, id: usize) -> Vec<PathBuf> {
-    let selected = ops.menuactions.as_ref().ok_or_else(|| super::menu_actions::SELECTION_CHANGED.to_string())
-        .and_then(|menu| menu.selected_path(id, Path::new(path)));
-    match selected {
-        Ok(item) => {
-            if ops.live.running().is_some() || ops.jobs.unfinished() > 0 {
-                busy(out, "rename");
-                return Vec::new();
-            }
-            let from = path.to_string();
-            let name = to.to_string();
-            do_rename_with(out, ops, path, CALL_DEADLINE, move || {
-                item.current().map_err(|error| op_err("rename", &from, &error))?;
-                ops::rename(Path::new(&from), &name)
-            })
-        }
-        Err(error) => { writeln!(out, "{}", error_line(&op_err("rename", path, &error))).ok(); out.flush().ok(); Vec::new() }
-    }
-}
-
-// Even a local rename can wait on the filesystem; the dispatcher only accepts its immutable paths.
-pub(crate) fn do_rename(out: &mut impl Write, ops: &mut Ops, path: &str, to: &str) -> Vec<PathBuf> {
-    if ops.live.running().is_some() || ops.jobs.unfinished() > 0 {
-        busy(out, "rename");
-        return Vec::new();
-    }
-    let from = path.to_string();
-    let name = to.to_string();
-    do_rename_with(out, ops, path, CALL_DEADLINE, move || ops::rename(Path::new(&from), &name))
-}
+#[path = "rename_selected.rs"]
+pub(crate) mod rename_selected;
+#[cfg(test)]
+pub(crate) use rename_selected::{do_menu_rename, do_rename};
 
 pub(crate) fn do_rename_with<F>(out: &mut impl Write, ops: &mut Ops, path: &str, deadline: Duration, work: F) -> Vec<PathBuf>
 where F: FnOnce() -> Result<(PathBuf, Vec<Step>), FleaError> + Send + 'static,
 {
-    let parent = Path::new(path).parent().unwrap_or(Path::new("/")).to_path_buf();
-    if pending_busy_for(out, ops, "rename", &[PathBuf::from(path)], &[parent]) { return Vec::new(); }
+    let parent = flea::bytename::view(path).parent().unwrap_or(Path::new("/")).to_path_buf();
+    if pending_busy_for(out, ops, "rename", &[flea::bytename::exact(path)], &[parent]) { return Vec::new(); }
     super::renamework::start(ops, path.to_string(), deadline, work);
     Vec::new()
 }
@@ -317,8 +291,8 @@ pub(crate) fn do_mkdir_requested(out: &mut impl Write, ops: &mut Ops, parent: &s
     let given = name.to_string();
     let default_base = default_base.map(str::to_owned);
     let work = move || match default_base.as_deref() {
-        Some(default_base) => ops::mkdir_with_base(Path::new(&base), &given, Some(default_base)),
-        None => ops::mkdir(Path::new(&base), &given),
+        Some(default_base) => ops::mkdir_with_base(&flea::bytename::view(&base), &given, Some(default_base)),
+        None => ops::mkdir(&flea::bytename::view(&base), &given),
     };
     if request == 0 { do_mkdir_with(out, ops, parent, CALL_DEADLINE, work) }
     else { created_request::mkdir_with(out, ops, parent, request, CALL_DEADLINE, work) }
@@ -339,7 +313,7 @@ fn land_mkdir(out: &mut impl Write, ops: &mut Ops, result: Result<(PathBuf, Vec<
     match result {
         Ok((dir, steps)) => {
             ops.journal.push(Entry { op: "mkdir".to_string(), steps });
-            writeln!(out, "{}", made_line(true, &dir.to_string_lossy())).ok();
+            writeln!(out, "{}", made_line(true, &dir.exact_text())).ok();
         }
         Err(e) => {
             writeln!(out, "{}", error_line(&e)).ok();
@@ -445,7 +419,7 @@ pub(crate) fn start_link_held(out: &mut impl Write, ops: &mut Ops, op: &str, pat
         }
     };
     // A source or target on a pending mount waits, before the question is taken.
-    let sources: Vec<PathBuf> = paths.iter().map(PathBuf::from).collect();
+    let sources: Vec<PathBuf> = paths.iter().map(flea::bytename::exact).collect();
     let target = dest_path.clone();
     if pending_busy_for(out, ops, "link", &sources, &[target]) {
         return;
@@ -511,15 +485,16 @@ fn run_link_held(op: &str, paths: Vec<String>, dest: PathBuf, policy: super::col
     // Each stranded replace sentence, and a mixed batch's first failure, reported on the linked line.
     let mut note = String::new();
     for source in &paths {
-        let src = Path::new(source);
+        let src = flea::bytename::view(source); let src = &*src;
+        let shown = flea::bytename::display(source);
         if !super::linkheld::matches(held, src) || src.symlink_metadata().is_err() {
             failed += 1;
-            if first_err.is_empty() { first_err = format!("the link source {source} changed or no longer exists"); }
+            if first_err.is_empty() { first_err = format!("the link source {shown} changed or no longer exists"); }
             continue;
         }
         let Some(dst) = super::link::dest_path(&dest, src) else {
             failed += 1;
-            if first_err.is_empty() { first_err = format!("{source} has no file name"); }
+            if first_err.is_empty() { first_err = format!("{shown} has no file name"); }
             continue;
         };
         let here = src.parent() == Some(dest.as_path());
@@ -527,7 +502,7 @@ fn run_link_held(op: &str, paths: Vec<String>, dest: PathBuf, policy: super::col
             super::collide::Place::Skip => { skipped += 1; }
             super::collide::Place::Refuse(msg) => {
                 failed += 1;
-                if first_err.is_empty() { first_err = format!("{source}: {msg}"); }
+                if first_err.is_empty() { first_err = format!("{shown}: {msg}"); }
             }
             super::collide::Place::Land { to, replace } => {
                 let mut replaced: Vec<super::trash::Entry> = Vec::new();
@@ -536,7 +511,7 @@ fn run_link_held(op: &str, paths: Vec<String>, dest: PathBuf, policy: super::col
                         (trashed, 0, _) => replaced = trashed,
                         _ => {
                             failed += 1;
-                            if first_err.is_empty() { first_err = format!("{source}: {}", super::collide::TRASH_REFUSED); }
+                            if first_err.is_empty() { first_err = format!("{shown}: {}", super::collide::TRASH_REFUSED); }
                             continue;
                         }
                     }
@@ -583,7 +558,7 @@ fn run_link_held(op: &str, paths: Vec<String>, dest: PathBuf, policy: super::col
                                     steps.push(Step::Trashed(entry));
                                 }
                                 failed += 1;
-                                if first_err.is_empty() { first_err = format!("{source}: {}", e.msg); }
+                                if first_err.is_empty() { first_err = format!("{shown}: {}", e.msg); }
                             }
                         }
                     }
@@ -597,7 +572,7 @@ fn run_link_held(op: &str, paths: Vec<String>, dest: PathBuf, policy: super::col
                             steps.push(Step::Trashed(entry));
                         }
                         failed += 1;
-                        if first_err.is_empty() { first_err = format!("{source}: {}", e.msg); }
+                        if first_err.is_empty() { first_err = format!("{shown}: {}", e.msg); }
                     }
                 }
             }
@@ -612,7 +587,7 @@ pub(crate) fn test_reported_link(o: &mut Ops, buf: &mut Vec<u8>, op: &str, paths
     let done = run_link(op, paths, dest.clone(), policy);
     let entry = Entry { op: "link".to_string(), steps: done.steps };
     report_op(buf, o, OpMsg::Linked { ok: done.ok, failed: done.failed, skipped: done.skipped,
-        entry, note: done.note, first_err: done.first_err, dest: dest.to_string_lossy().to_string() });
+        entry, note: done.note, first_err: done.first_err, dest: dest.exact_text().to_string() });
 }
 
 // Show original answers beside the loop, because read_link and canonicalize can stall on a dead mount.
@@ -632,7 +607,7 @@ pub(crate) fn do_link_target(out: &mut impl Write, path: &str, id: usize) {
     do_link_target_held(out, path, id, None);
 }
 pub(crate) fn do_link_target_held(out: &mut impl Write, path: &str, id: usize, expected: Option<&str>) {
-    let target = Path::new(path);
+    let target = flea::bytename::view(path); let target = &*target;
     let text = match std::fs::read_link(target) {
         Ok(t) => t,
         Err(e) => {
@@ -659,21 +634,21 @@ pub(crate) fn do_link_target_held(out: &mut impl Write, path: &str, id: usize, e
 // A trailing .. canonicalizes whole, any other target only its folder, as create_relative splits it.
 fn link_target_parts(absolute: &Path) -> (String, String) {
     let lexical = || {
-        let directory = absolute.parent().unwrap_or(Path::new("/")).to_string_lossy().to_string();
-        let name = absolute.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let directory = absolute.parent().unwrap_or(Path::new("/")).exact_text().to_string();
+        let name = absolute.file_name().map(|n| n.exact_text().to_string()).unwrap_or_default();
         (directory, name)
     };
     if matches!(absolute.components().next_back(), Some(Component::ParentDir)) {
         let Ok(resolved) = absolute.canonicalize() else { return lexical() };
         return (
-            resolved.parent().unwrap_or(Path::new("/")).to_string_lossy().to_string(),
-            resolved.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            resolved.parent().unwrap_or(Path::new("/")).exact_text().to_string(),
+            resolved.file_name().map(|n| n.exact_text().to_string()).unwrap_or_default(),
         );
     }
     let Some(folder) = absolute.parent() else { return lexical() };
     let Ok(folder) = folder.canonicalize() else { return lexical() };
-    let name = absolute.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    (folder.to_string_lossy().to_string(), name)
+    let name = absolute.file_name().map(|n| n.exact_text().to_string()).unwrap_or_default();
+    (folder.exact_text().to_string(), name)
 }
 
 // Permissions batch: one entry holds every path Apply changed, so one undo restores all.
@@ -688,7 +663,7 @@ pub(crate) fn do_permissions_batch(out: &mut impl Write, ops: &mut Ops, paths: V
         out.flush().ok();
         return;
     }
-    let items: Vec<(PathBuf, String)> = paths.into_iter().zip(modes).map(|(p, m)| (PathBuf::from(p), m)).collect();
+    let items: Vec<(PathBuf, String)> = paths.into_iter().zip(modes).map(|(p, m)| (flea::bytename::exact(p), m)).collect();
     // The reply names the first target mode.
     let shown = items.first().map(|(_, m)| m.clone()).unwrap_or_default();
     // A target on a pending mount waits; writes elsewhere run beside the held write.
@@ -724,17 +699,17 @@ pub(crate) fn do_newfile(out: &mut impl Write, ops: &mut Ops, parent: &str, name
         return Vec::new();
     }
     // A parent on a pending mount waits; writes elsewhere run beside the held write.
-    if pending_on_any(ops, &[PathBuf::from(parent)], &[]) {
+    if pending_on_any(ops, &[flea::bytename::exact(parent)], &[]) {
         let request = format!(r#"{{"op":"newFile","id":{}}}"#, id);
         writeln!(out, "{}", super::menu_actions::response(&request, Err("An operation is already running.".into()))).ok();
         out.flush().ok();
         return Vec::new();
     }
-    let created = super::menu_actions::create_file(Path::new(parent), name);
+    let created = super::menu_actions::create_file(&flea::bytename::view(parent), name);
     let touched = created.as_ref().map(|(path, _)| vec![path.clone()]).unwrap_or_default();
     let result = created.map(|(path, identity)| {
         ops.journal.push(Entry { op: "newfile".into(), steps: vec![super::undo::Step::MadeFile { path: path.clone(), identity }] });
-        format!(r#""path":"{}""#, crate::json::escape(&path.to_string_lossy()))
+        format!(r#""path":"{}""#, crate::json::escape(&path.exact_text()))
     });
     let request = format!(r#"{{"op":"newFile","id":{}}}"#, id);
     writeln!(out, "{}", super::menu_actions::response(&request, result)).ok();
@@ -854,7 +829,7 @@ pub(crate) fn report_op(out: &mut impl Write, ops: &mut Ops, mut msg: OpMsg) {
         } => {
             ops.live.finished_if(id);
             ops.transfer_retry = (id, retry);
-            writeln!(out, "{}", transferdone_line(id, ok, failed, skipped, cancelled, &ops.transfer_retry.1, durable, &note, &refused)).ok();
+            writeln!(out, "{}", transferdone_line(id, crate::backend::opsreq::TransferCounts { ok, failed, skipped }, cancelled, &ops.transfer_retry.1, durable, &note, &refused)).ok();
         }
         done @ OpMsg::MergeDone { .. } => {
             let line = super::merge::transferdone_merge_line(&done);
@@ -907,6 +882,17 @@ pub(crate) fn report_op(out: &mut impl Write, ops: &mut Ops, mut msg: OpMsg) {
             super::tagsreq::land(out, ops, result);
             forget_pending(ops, id);
             ops.live.finished_if(id);
+        }
+        // A convert journals what it published, so z removes those outputs and never an older operation.
+        OpMsg::Converted { id, line, steps } => {
+            if !steps.is_empty() {
+                ops.journal.push(Entry {
+                    op: "convert".to_string(),
+                    steps,
+                });
+            }
+            writeln!(out, "{}", line).ok();
+            ops.detached.remove(id);
         }
         // Meta never claims the operation slot, so it does not clear it either.
         OpMsg::Meta { line } => {
@@ -2228,7 +2214,7 @@ mod tests {
         let mut busy = out();
         let formats = std::sync::Arc::new(crate::backend::archive::Formats::from_tools(true, true));
         crate::backend::archivereq::start_archive(&mut busy, &mut o, std::sync::Arc::clone(&formats), "compress",
-            vec![remote_compress.to_string_lossy().to_string()], "tar".into(), PathBuf::new(), remote.join("out.tar"), 0, String::new(), false);
+            crate::backend::archivereq::ArchiveRequest { compressing: true, paths: vec![remote_compress.to_string_lossy().to_string()], format: "tar".into(), archive: PathBuf::new(), dest: remote.join("out.tar"), password: String::new(), encrypt_names: false }, 0);
         assert!(text(&busy).contains("already running"), "a compress on a pending mount waits: {}", text(&busy));
         assert!(!text(&busy).contains("archivestarted"), "the refused compress starts nothing: {}", text(&busy));
         assert_eq!(o.journal.len(), journaled, "the refused compress journals nothing");
@@ -2237,7 +2223,7 @@ mod tests {
         let local_compress = local.file("c.txt", "c");
         let mut started = out();
         crate::backend::archivereq::start_archive(&mut started, &mut o, std::sync::Arc::clone(&formats), "compress",
-            vec![local_compress.to_string_lossy().to_string()], "tar".into(), PathBuf::new(), local.join("out.tar"), 0, String::new(), false);
+            crate::backend::archivereq::ArchiveRequest { compressing: true, paths: vec![local_compress.to_string_lossy().to_string()], format: "tar".into(), archive: PathBuf::new(), dest: local.join("out.tar"), password: String::new(), encrypt_names: false }, 0);
         assert!(text(&started).contains("archivestarted"), "a compress elsewhere starts: {}", text(&started));
         for _ in 0..LAND_ROUNDS {
             let msg = rx.recv_timeout(LAND_BOUND).expect("the compress reports through the op channel");
@@ -2257,7 +2243,7 @@ mod tests {
         let local_divergent = local.file("c2.txt", "c");
         let mut busy = out();
         crate::backend::archivereq::start_archive(&mut busy, &mut o, std::sync::Arc::clone(&formats), "compress",
-            vec![local_divergent.to_string_lossy().to_string()], "tar".into(), PathBuf::new(), local.join("out2.tar"), 5, String::new(), false);
+            crate::backend::archivereq::ArchiveRequest { compressing: true, paths: vec![local_divergent.to_string_lossy().to_string()], format: "tar".into(), archive: PathBuf::new(), dest: local.join("out2.tar"), password: String::new(), encrypt_names: false }, 5);
         assert!(text(&busy).contains("already running"), "a divergent selection on a pending mount waits: {}", text(&busy));
         assert!(!text(&busy).contains("archivestarted"), "the refused compress starts nothing: {}", text(&busy));
         // An extract of the held mount waits before any tool runs.
@@ -2266,7 +2252,7 @@ mod tests {
         let journaled = o.journal.len();
         let mut busy = out();
         crate::backend::archivereq::start_archive(&mut busy, &mut o, std::sync::Arc::clone(&formats), "extract",
-            Vec::new(), "tar".into(), remote_archive.clone(), remote_exdest.clone(), 0, String::new(), false);
+            crate::backend::archivereq::ArchiveRequest { compressing: false, paths: Vec::new(), format: "tar".into(), archive: remote_archive.clone(), dest: remote_exdest.clone(), password: String::new(), encrypt_names: false }, 0);
         assert!(text(&busy).contains("already running"), "an extract on a pending mount waits: {}", text(&busy));
         assert!(!text(&busy).contains("archivestarted"), "the refused extract starts nothing: {}", text(&busy));
         assert_eq!(o.journal.len(), journaled, "the refused extract journals nothing");
@@ -2276,7 +2262,7 @@ mod tests {
         let fresh = local.join("exdest-fresh");
         let mut started = out();
         crate::backend::archivereq::start_archive(&mut started, &mut o, std::sync::Arc::clone(&formats), "extract",
-            Vec::new(), "tar".into(), bogus, fresh, 0, String::new(), false);
+            crate::backend::archivereq::ArchiveRequest { compressing: false, paths: Vec::new(), format: "tar".into(), archive: bogus, dest: fresh, password: String::new(), encrypt_names: false }, 0);
         assert!(text(&started).contains("archivestarted"), "an extract elsewhere starts: {}", text(&started));
         for _ in 0..LAND_ROUNDS {
             let msg = rx.recv_timeout(LAND_BOUND).expect("the extract reports through the op channel");
@@ -2297,7 +2283,7 @@ mod tests {
         let remote_convert = remote.file("in.png", "pixels");
         let journaled = o.journal.len();
         let mut busy = out();
-        crate::backend::archivereq::start_convert(&mut busy, &mut o, remote_convert.clone(), remote.join("out.jpg"), false, 0, 71, false);
+        crate::backend::archivereq::start_convert(&mut busy, &mut o, crate::backend::archivereq::ConvertRequest { input: remote_convert.clone(), dest: remote.join("out.jpg"), strip: false, request_id: 71 }, 0, false);
         assert!(text(&busy).contains("already running"), "a convert on a pending mount waits: {}", text(&busy));
         assert!(!text(&busy).contains("convertstarted"), "the refused convert starts nothing: {}", text(&busy));
         assert_eq!(o.journal.len(), journaled, "the refused convert journals nothing");
@@ -2305,7 +2291,7 @@ mod tests {
         // The same convert elsewhere passes the gate, and a divergent selection still waits.
         let local_convert = local.file("in.png", "pixels");
         let mut past = out();
-        crate::backend::archivereq::start_convert(&mut past, &mut o, local_convert.clone(), local.join("out.jpg"), false, 0, 72, false);
+        crate::backend::archivereq::start_convert(&mut past, &mut o, crate::backend::archivereq::ConvertRequest { input: local_convert.clone(), dest: local.join("out.jpg"), strip: false, request_id: 72 }, 0, false);
         assert!(!text(&past).contains("already running"), "a convert elsewhere passes the gate: {}", text(&past));
         if text(&past).contains("convertstarted") {
             let landed = rx.recv_timeout(LAND_BOUND).expect("the convert reports through the op channel");
@@ -2315,11 +2301,11 @@ mod tests {
         }
         let local_in2 = local.file("in2.png", "pixels");
         let mut busy = out();
-        crate::backend::archivereq::start_convert(&mut busy, &mut o, local_in2, local.join("out2.jpg"), false, 5, 73, false);
+        crate::backend::archivereq::start_convert(&mut busy, &mut o, crate::backend::archivereq::ConvertRequest { input: local_in2, dest: local.join("out2.jpg"), strip: false, request_id: 73 }, 5, false);
         assert!(text(&busy).contains("already running"), "a divergent selection on a pending mount waits: {}", text(&busy));
         // A convert probe only reads, so it never waits on the gate.
         let mut probe = out();
-        crate::backend::archivereq::start_convert(&mut probe, &mut o, remote_convert, remote.join("out.jpg"), false, 0, 74, true);
+        crate::backend::archivereq::start_convert(&mut probe, &mut o, crate::backend::archivereq::ConvertRequest { input: remote_convert, dest: remote.join("out.jpg"), strip: false, request_id: 74 }, 0, true);
         assert!(text(&probe).contains("convertchecked"), "a probe answers past the gate: {}", text(&probe));
         assert!(!text(&probe).contains("already running"), "a probe is never the gate: {}", text(&probe));
         // A permissions batch on the held mount waits, and the mode stays.

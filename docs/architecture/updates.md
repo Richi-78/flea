@@ -16,16 +16,22 @@ decides the kind:
   databases without root and exits 0 with updates, 2 with none and 1 on an error; it is never given
   `--nosync`, which answers 2 when it has no copy to read. GitHub is never asked for OPR, because it
   would announce a tag OPR cannot install yet.
+- `flea-bin`, signed or not, is `release`: the prebuilt release binary, which About names a release build
+  that Omarchy update keeps current, never a checkout to rebuild.
 - Any other owner is `local`: a `flea` no signature validated (a local `makepkg -si` build), the former
-  AUR names `flea-bin` and `flea-git`, and any other name. A binary no package owns is `unowned`. Both
-  are `unchecked`: no source describes them, and none is asked. A box that still has an AUR package moves
+  AUR name `flea-git`, and any other name. A binary no package owns is `unowned`. All three are
+  `unchecked`: no source here describes them, and none is asked. A box that still has an AUR package moves
   to OPR's `flea` through `omarchy update` once the OPR recipe declares `replaces=('flea-bin' 'flea-git')`:
   pacman's `-Syu` takes that replacement, and upgrades a same-name AUR `flea` to a newer repository build.
+
+About's unchecked package kinds use the existing "Release build" state and "Omarchy update installs newer
+releases." note. Only an unowned binary uses "Built from source" and the checkout rebuild note; a checkout
+or unpacked binary beside an installed package never borrows that package's ownership.
 
 Every version that reaches `vercmp` or a screen matches `^[0-9]+(\.[0-9]+){2}-[0-9]+$` first, which is
 how network text is kept out of the line; `vercmp` then decides. The line is
 `<state> <kind> <installed> <latest>`, the states `available`, `current`, `failed` and `unchecked`, the
-kinds `opr`, `local` and `unowned`, and `-` for a version the check does not have. See
+kinds `opr`, `release`, `local` and `unowned`, and `-` for a version the check does not have. See
 "Modes" for the exit statuses.
 
 **What is launched.** `flea --update` spawns `omarchy-launch-floating-terminal-with-presentation

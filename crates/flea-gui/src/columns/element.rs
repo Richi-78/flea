@@ -140,12 +140,8 @@ impl Element for TrackElement {
         let advance = f32::from(paint.body_advance(window));
         let lane = super::geometry::lane(&paint.typeface);
         let view = &self.tracks[self.at];
-        // A refused rename grows the active track's edited row and moves the rows below it down.
-        let grow = if view.slot == self.focus.rename_slot.unwrap_or(Slot::Active) {
-            self.focus.grow
-        } else {
-            Grow::default()
-        };
+        // A refusal grows only the track hosting its editor.
+        let grow = self.focus.grow_for(view.slot);
         paint.drawn = Some(super::paint::Drawn {
             bounds,
             focus: Rc::clone(&self.focus),
@@ -295,5 +291,7 @@ impl Element for TrackElement {
         cx: &mut App,
     ) {
         self.paint_track(bounds, *palette, window, cx);
+        let mut paint = self.paint.borrow_mut();
+        paint.paint_serial = paint.paint_serial.wrapping_add(1);
     }
 }

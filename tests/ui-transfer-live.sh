@@ -502,6 +502,12 @@ transferlive_settled() {
         "$transferlive_seen_first" "$transferlive_seen_last" "$transferlive_seen_countdown" "$said"
 }
 
+# The HIG collision title is a full sentence and ends with a full stop (APL-DIALOG-16); the QML card drew none.
+transferlive_title_stop() {
+    [[ "$test_frontend" == gpui ]] && printf '.'
+    return 0
+}
+
 # From the leg's source listing into its to folder, which is where every paste in this case lands.
 transferlive_enter_to() {
     local dir="$1" count="$2"
@@ -578,10 +584,12 @@ transferlive_batch() {
     menus_expect keyDeliveryState '(.clipboard.paths | length) == 3 and (.clipboard.cut | not)' "batch: the three files are on the clipboard"
     transferlive_enter_to "$dir" 1
     key p >/dev/null
-    menus_expect collideState '.opened and .title == "b.bin already exists in to" and .names == ["b.bin"] and .more == ""
+    menus_expect collideState '.opened and .title == "b.bin already exists in to'"$(transferlive_title_stop)"'" and .names == ["b.bin"] and .more == ""
         and .focus == "keep" and ([.buttons[] | select(.name != "merge") | .visible] | all) and ([.buttons[] | select(.name == "merge") | .visible] == [false])' "batch: the paste asks once about b.bin, on Keep both, with every file button up and Merge hidden"
     key h >/dev/null
-    menus_expect collideState '.opened and .focus == "skip"' "batch: h moves the focus to Skip"
+    menus_expect collideState '.opened and .focus == "replace"' "batch: h moves the focus to Replace"
+    key h >/dev/null
+    menus_expect collideState '.opened and .focus == "skip"' "batch: h again moves the focus to Skip"
     key -k Return >/dev/null
     transferlive_watch batch "$want" 3 'a\.bin|c\.bin'
     transferlive_settled batch "Copied 2 of 3 · 1 skipped · z undoes"
@@ -618,10 +626,10 @@ transferlive_replace() {
         "replace: big.bin is on the clipboard"
     transferlive_enter_to "$dir" 1
     key p >/dev/null
-    menus_expect collideState '.opened and .title == "big.bin already exists in to" and .names == ["big.bin"] and .more == ""
+    menus_expect collideState '.opened and .title == "big.bin already exists in to'"$(transferlive_title_stop)"'" and .names == ["big.bin"] and .more == ""
         and .focus == "keep" and ([.buttons[] | select(.name != "merge") | .visible] | all) and ([.buttons[] | select(.name == "merge") | .visible] == [false])' "replace: the paste asks about big.bin, on Keep both, with every file button up and Merge hidden"
-    key l >/dev/null
-    menus_expect collideState '.opened and .focus == "replace"' "replace: l moves the focus to Replace"
+    key h >/dev/null
+    menus_expect collideState '.opened and .focus == "replace"' "replace: h moves the focus to Replace"
     trash_trap_own "$replace_trash" "$dir" "transferlive: replace" big.bin
     key -k Return >/dev/null
     transferlive_watch replace "$want" 1 'big\.bin'
@@ -638,34 +646,4 @@ transferlive_replace() {
             || fail "transferlive: replace: owned entries could not be removed from $replace_trash"
     fi
     sandbox_remove "$dir"
-}
-
-# Issue: the transfer card must be proven on a real copy, speed and time left included, and operationslive
-# misses its window because its 1 GiB sparse file copies before the harness looks. This case sizes a random payload
-# from a throughput sample taken on the fixture filesystem itself, then drives three pastes through the real
-# clipboard: one big file into an empty folder, a batch with Skip whose total must leave the skipped file out, and a
-# Replace whose old item must land in this case's own Trash. Every payload byte is deleted on every exit path.
-case_transferlive() {
-    local menus_checks=0
-    transferlive_root="$fixture_root/transferlive"
-    transferlive_bus_pid=""
-    transferlive_writer_pids=()
-    transferlive_sample_one="" transferlive_sample_batch="" transferlive_sample_replace=""
-    trap 'transferlive_teardown' EXIT
-    sandbox_make "$transferlive_root"
-    seed_ui_state "$transferlive_root/state" "$transferlive_ui_state"
-    export XDG_DATA_HOME="$transferlive_root/data"
-    mkdir "$XDG_DATA_HOME" || fail "transferlive: no private data home"
-    transferlive_prepare
-    transferlive_start_bus
-    transferlive_one
-    transferlive_batch
-    transferlive_replace
-    printf 'TRANSFERLIVE copy=%s/s random_write=%s/s payload=%s half=%s one=%s batch=%s replace=%s\n' \
-        "$(transferlive_size "$transferlive_copy_rate")" "$(transferlive_size "$transferlive_random_rate")" \
-        "$(transferlive_size "$transferlive_full_bytes")" "$(transferlive_size "$transferlive_half_bytes")" \
-        "$transferlive_sample_one" "$transferlive_sample_batch" "$transferlive_sample_replace"
-    transferlive_teardown
-    trap - EXIT
-    [[ ! -e "$transferlive_root" ]] || fail "transferlive: $transferlive_root survived the teardown"
 }
