@@ -5,12 +5,47 @@ P0 is the local browser, and remotes, search, disk operations and Flea's own ter
 interface (`flea --tui`, `src/tui`) have since landed on top of it. An encrypted drive
 unlocks and locks from its rail row through `src/unlock.rs`.
 
+**This checkout is a personal fork porting Flea to CachyOS + niri + Noctalia; see
+[This fork: the niri port](#this-fork-the-niri-port) below before acting on the
+upstream text.**
+
+## This fork: the niri port
+
+This fork targets CachyOS with the **niri** compositor and the **Noctalia** shell.
+Hyprland, hyprshell and Omarchy are not installed and are not a target. The
+operational plan — decisions, risks, phases and acceptance checklist — lives in
+[`docs/PIANO-CACHYOS-NIRI-NOCTALIA.md`](docs/PIANO-CACHYOS-NIRI-NOCTALIA.md)
+(written in Italian). Read it before changing theme, launcher, packaging or
+compositor code.
+
+Porting constraints that override the upstream text below:
+
+- **niri only.** Hyprland-only paths (`hyprctl`, `Quickshell.Hyprland`, Hyprland
+  bindings) are removed from or guarded out of the niri path, not repaired for
+  Hyprland. `src/hyprkeys.rs` becomes a no-op under niri that prints the KDL
+  snippet to install by hand.
+- **Noctalia is the only theme source.** Flea reads
+  `$XDG_STATE_HOME/flea/theme/colors.toml`, `shell.toml` and the `theme.name`
+  marker written by a Noctalia user template, instead of
+  `~/.local/state/omarchy/current`. `src/tui/theme.rs` must read the same files.
+- **Local packaging.** The package is built with `makepkg -si` from a local
+  `PKGBUILD` without an `omarchy` dependency; no AUR, no distribution packaging.
+- **No Hyprland/hyprshell/Omarchy tests.** Do not add or plan tests that require
+  `hyprctl`, `hyprshell`, `omarchy-*`, `/usr/share/omarchy` or a Hyprland session;
+  none of those will be installed. Verify through the CachyOS/niri smoke suite
+  instead.
+- **Omarchy QML modules are vendored** under `ui/vendor/omarchy/` rather than
+  symlinked from `/usr/share/omarchy`, with minimal patches documented in the plan.
+- **`docs/` is local-only.** It is gitignored and is not synced to the remote, so
+  the architecture reference and this plan exist on disk for local work only.
+
 ## Reading the architecture reference
 
 Read the seven load-bearing rules below before changing the implementation. Then
 read the sections relevant to the task through the section routes at the end of
 this file or the [architecture index](docs/architecture/README.md). The index also
-links directly to every subsection.
+links directly to every subsection. In this fork `docs/` is gitignored and not
+synced to the remote, so these links resolve on disk but not on the remote.
 
 Use the module map to locate implementation owners, Testing for verification,
 and File budget for file limits. Read the listing, preview, thumbnail or write
@@ -108,6 +143,7 @@ Markdown navigation links are relative to the document containing them.
 
 Each link names the destination of the original top-level section. The
 [architecture index](docs/architecture/README.md) includes the subsections.
+These files are local-only in this fork and do not exist on the remote.
 
 <a id="two-phase-listing"></a>
 

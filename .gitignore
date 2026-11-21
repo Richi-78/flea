@@ -14,10 +14,7 @@ __pycache__/
 Thumbs.db
 
 # Session artefacts: working documents for this project's own build sessions, never shipped.
-docs/baseline-*.md
-docs/live-battery-*.md
-docs/release-ledger.md
-docs/pending/
+docs/
 
 # Session and build-tracking state, never shipped.
 .superpowers/
