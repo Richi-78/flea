@@ -42,6 +42,32 @@ fn language_code(text: &str) -> &str {
     text.lines().next().unwrap_or("").trim()
 }
 
+// Prefer Noctalia's explicit locale when set; settings.toml overrides user config.toml.
+fn noctalia_paths() -> Vec<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    let config = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
+    let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/state"));
+    vec![config.join("noctalia/config.toml"), state.join("noctalia/settings.toml")]
+}
+
+fn noctalia_setting(key: &str) -> Option<String> {
+    let mut value = None;
+    for path in noctalia_paths() {
+        let Some(text) = catalog::read(&path) else { continue; };
+        let mut shell = false;
+        for line in text.lines() {
+            let line = line.split('#').next().unwrap_or("").trim();
+            if line.starts_with('[') { shell = line == "[shell]"; continue; }
+            if shell {
+                if let Some((name, raw)) = line.split_once('=') {
+                    if name.trim() == key { value = Some(raw.trim().trim_matches('"').trim_matches('\'').to_owned()); }
+                }
+            }
+        }
+    }
+    value.filter(|v| !v.is_empty())
+}
+
 // Prefer the standard locale precedence and reduce POSIX locale spellings (it_IT.UTF-8) to the
 // roster's BCP-47 form (it-IT); I18n::reload then falls back to the primary language if needed.
 fn system_language() -> String {
@@ -276,8 +302,12 @@ impl I18n {
             .unwrap_or_default();
         self.roster = locale::parse(&roster_text, &registry);
         self.language_text = catalog::read(&language_file);
+        let noctalia = noctalia_paths();
+        for path in &noctalia { self.watch(path.clone()); }
+        let follows_desktop = self.paths.language_file.file_name().is_some_and(|name| name == "language")
+            && self.paths.language_file.parent().and_then(Path::file_name).is_some_and(|name| name == "flea");
         let requested = self.language_text.as_deref().map(language_code).filter(|code| !code.is_empty())
-            .map(str::to_owned).unwrap_or_else(|| {
+            .map(str::to_owned).or_else(|| follows_desktop.then(|| noctalia_setting("lang")).flatten()).unwrap_or_else(|| {
                 if self.paths.language_file.file_name().is_some_and(|name| name == "language")
                     && self.paths.language_file.parent().and_then(Path::file_name).is_some_and(|name| name == "flea") {
                     system_language()

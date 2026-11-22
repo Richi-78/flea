@@ -1,6 +1,6 @@
 use crate::list::Typeface;
 use flea::{jsondoc::Json, ui_logic_settings_pages::textsize};
-use gpui::{font, px, Global};
+use gpui::{Global, font, px};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,7 +23,7 @@ impl Fonts {
                 let line = uncomment(line).trim();
                 if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
                     section = name;
-                } else if section == "font" {
+                } else if section == "font" || section == "shell" {
                     if let Some((key, value)) = line.split_once('=') {
                         if let Some(value) = shell_value(value.trim()) {
                             values.insert(key.trim(), value);
@@ -34,6 +34,12 @@ impl Fonts {
         }
         let number = |key| values.get(key).and_then(|s| integer(s));
         let base = number("base-size").unwrap_or(12).max(1) as u32;
+        let family = values
+            .get("font_family")
+            .or_else(|| values.get("family"))
+            .filter(|family| !family.trim().is_empty())
+            .map(|family| family.trim().to_owned())
+            .unwrap_or(family);
         let token = |key, fallback| {
             number(key)
                 .filter(|n| *n > 0)
@@ -129,6 +135,12 @@ pub(crate) fn shell_value(raw: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn noctalia_shell_font_family_can_override_the_fontconfig_fallback() {
+        let fonts = Fonts::from_sources("", "[shell]\nfont_family = 'Inter'", "Sans".into());
+        assert_eq!(fonts.family, "Inter");
+    }
 
     #[test]
     fn shell_user_keys_override_theme_keys_and_pinned_size_uses_the_shared_ladder() {

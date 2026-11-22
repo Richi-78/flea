@@ -108,9 +108,11 @@ fn m9_g2rows_03_icons_private_home_keeps_system_data_dirs() {
     for dirs in [None, Some(std::ffi::OsStr::new(""))] {
         let lookup = Icons::from_data("Fixture", Some(Path::new("/private/home")), None, dirs);
         assert!(lookup.bases.contains(&PathBuf::from("/usr/share/icons")));
-        assert!(lookup
-            .pixmaps
-            .contains(&PathBuf::from("/usr/share/pixmaps")));
+        assert!(
+            lookup
+                .pixmaps
+                .contains(&PathBuf::from("/usr/share/pixmaps"))
+        );
     }
     let explicit = Icons::from_data(
         "Fixture",
@@ -177,9 +179,9 @@ fn m9_g2rows_03_icons_blank_theme_uses_gtk() {
         "\n",
     );
     let config = root.dir("private-home/.config");
-    root.dir("private-home/.config/gtk-3.0");
+    root.dir("private-home/.config/gtk-4.0");
     root.file(
-        "private-home/.config/gtk-3.0/settings.ini",
+        "private-home/.config/gtk-4.0/settings.ini",
         "[Settings]\ngtk-icon-theme-name=Fixture\n",
     );
     let data = root.dir("data");
@@ -218,7 +220,9 @@ fn m9_g2rows_03_icons_system_pixmaps_survive_data_dir_override() {
         None,
         Some(std::ffi::OsStr::new("/opt/share")),
     );
-    assert!(lookup
-        .pixmaps
-        .contains(&PathBuf::from("/usr/share/pixmaps")));
+    assert!(
+        lookup
+            .pixmaps
+            .contains(&PathBuf::from("/usr/share/pixmaps"))
+    );
 }

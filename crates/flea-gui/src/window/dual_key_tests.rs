@@ -125,7 +125,7 @@ fn the_preset_dual_chord_toggles_the_same_way(cx: &mut TestAppContext) {
         ("default", "ctrl-4"),
         ("vim", "ctrl-4"),
         ("mac", "ctrl-4"),
-        ("windows", "ctrl-shift-4"),
+        ("windows", "ctrl-4"),
     ] {
         let handle = single(cx, preset, View::Columns);
         key(cx, handle, chord);

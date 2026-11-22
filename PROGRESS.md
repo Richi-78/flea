@@ -46,7 +46,7 @@ Nessuna dipendenza o test che richieda Hyprland, hyprshell, `omarchy-*`,
 - [ ] `ui/TabDragGeometry.qml`: tear-off disabilitato sotto niri
 - [ ] `ui/NetworkDialog.qml`: niente `omarchy-launch-terminal`
 - [~] Etichette Display aggiornate: Follow System, scala niri, Rounded icons; restano testi About e altre etichette legacy
-- [ ] Icon theme: `QS_ICON_THEME` → gsettings → hicolor
+- [x] Icon theme lookup for Open With icons: GTK 4 `settings.ini` → GTK 3 → gsettings → hicolor; Noctalia writes Breeze in GTK 4 settings. File/folder listing glyphs remain Flea vectors by choice.
 
 ## Fase 4 — Packaging
 
@@ -63,7 +63,7 @@ Nessuna dipendenza o test che richieda Hyprland, hyprshell, `omarchy-*`,
 
 ## Fase 6 — Rifinitura
 
-- [ ] Icon theme fallback
+- [x] Icon theme fallback for Open With app icons (GTK 4/3, gsettings, hicolor).
 - [ ] Snippet keybind e window rule niri documentati
 - [ ] Verifica manuale dark/light e cambio palette
 - [ ] Note di fork aggiornate
@@ -88,6 +88,14 @@ Nessuna dipendenza o test che richieda Hyprland, hyprshell, `omarchy-*`,
 - [!] `cargo test --release --locked`: 4965 passati, 6 falliti. Due test richiedono `7z` (assente), un test bsdtar fallisce nell’ambiente, e la vecchia asserzione sul path TUI è stata corretta dopo il run.
 - [x] Test i18n: `cargo test --lib i18n::tests:: -- --skip contracts` — 12 passati; verificati roster bundled, preferenza lingua salvata e reload file.
 - [x] Rimpiazzata l'azione Omarchy/editor in About > Language con il selettore nel pannello GPUI, popolato dal roster; la scelta è persistita con rename atomico. `cargo test -p flea-gui --lib window::settings::` — 88 passati.
+
+## Lavoro recente (2026-11-22)
+
+- [x] Windows-like view shortcuts now match Mac-like: Ctrl+1/2/3/4 for List/Columns/Grid/Dual; regenerated `keys.toml` outputs and updated shortcut-help coverage. `tests/keymap-gen.sh`, `./tests/js.sh keymap` (823 checks) and GPUI Dual shortcut test pass.
+- [x] Noctalia `shell.lang` is read from `~/.config/noctalia/config.toml` and `~/.local/state/noctalia/settings.toml` when no explicit Flea language is set; both files are watched. Font presentation reads Noctalia config/settings as sources and resolves `shell.font_family`; Flea font-size config remains supported. Font/source tests and i18n tests pass.
+- [x] `flea --picker` portal backend was temporarily registered user-locally for real browser/app testing. D-Bus backend activation and FileChooser methods verified; browser upload test confirmed working. Undo with `target/release/flea --picker off`, then remove the temporary files `~/.local/share/xdg-desktop-portal/portals/flea.portal` and `~/.local/share/dbus-1/services/org.freedesktop.impl.portal.desktop.flea.service`.
+- [x] Settings > About “Make Flea the default” already claims/releases both directory-handler and FileChooser portal routes and restarts xdg-desktop-portal; this requires the installed package desktop entry and portal backend. Claim tests: 16 passed.
+- [x] GTK 4 icon theme lookup validated against Noctalia’s Breeze setting; Open With app icons use the selected theme. Listing file/folder glyphs deliberately remain palette-tinted Flea vectors.
 
 ## Decisioni e scostamenti dal piano
 

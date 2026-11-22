@@ -2,6 +2,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
+use std::process::Command;
 
 const MAX_VISITED_THEMES: usize = 64;
 
@@ -23,20 +24,23 @@ impl Icons {
             .ok()
             .filter(|s| !s.trim().is_empty())
             .or_else(|| {
-                home.as_ref().and_then(|p| {
-                    std::fs::read_to_string(
-                        p.join(".local/state/omarchy/current/theme/icons.theme"),
-                    )
-                    .ok()
+                config.as_ref().and_then(|p| {
+                    ["gtk-4.0/settings.ini", "gtk-3.0/settings.ini"]
+                        .iter()
+                        .find_map(|file| std::fs::read_to_string(p.join(file)).ok())
+                        .and_then(|text| {
+                            key(&ini(&text), "Settings", "gtk-icon-theme-name").map(str::to_owned)
+                        })
                 })
             })
-            .filter(|s| !s.trim().is_empty())
             .or_else(|| {
-                config
-                    .and_then(|p| std::fs::read_to_string(p.join("gtk-3.0/settings.ini")).ok())
-                    .and_then(|text| {
-                        key(&ini(&text), "Settings", "gtk-icon-theme-name").map(str::to_owned)
-                    })
+                Command::new("gsettings")
+                    .args(["get", "org.gnome.desktop.interface", "icon-theme"])
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .and_then(|output| String::from_utf8(output.stdout).ok())
+                    .map(|value| value.trim().trim_matches('\'').to_owned())
             })
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| "hicolor".into())

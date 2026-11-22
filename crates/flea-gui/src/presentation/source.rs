@@ -30,13 +30,18 @@ pub(super) type Stamps = [Option<(u64, u64, u64, i64, i64, i64, i64, u32)>; 7];
 /// The seven files a presentation reads, and where the resolved font family is cached.
 pub(super) struct Sources {
     inputs: [PathBuf; 7],
+    noctalia: Vec<PathBuf>,
     cache: PathBuf,
 }
 
 impl Sources {
     #[cfg(test)]
     pub fn at(inputs: [PathBuf; 7], cache: PathBuf) -> Self {
-        Self { inputs, cache }
+        Self {
+            inputs,
+            noctalia: Vec::new(),
+            cache,
+        }
     }
 
     pub fn current() -> Self {
@@ -58,11 +63,15 @@ impl Sources {
             inputs: [
                 theme.join("colors.toml"),
                 theme.join("shell.toml"),
-                config.join("flea/shell.toml"), 
+                config.join("flea/shell.toml"),
                 config.join("fontconfig/fonts.conf"),
                 config.join("fontconfig/conf.d/50-omarchy-input-method.conf"),
                 state.join("omarchy/toggles/hypr/window-opaque.lua"),
                 state.join("omarchy/toggles/hypr/window-glassy.lua"),
+            ],
+            noctalia: vec![
+                config.join("noctalia/config.toml"),
+                state.join("noctalia/settings.toml"),
             ],
             cache: state.join("flea/fc-match-monospace"),
         }
@@ -80,6 +89,12 @@ impl Sources {
             self.inputs[0]
                 .parent()
                 .and_then(Path::parent)
+                .map(Path::to_path_buf),
+        );
+        dirs.extend(
+            self.noctalia
+                .iter()
+                .filter_map(|path| path.parent())
                 .map(Path::to_path_buf),
         );
         dirs.sort();
@@ -107,6 +122,7 @@ impl Sources {
         for (path, input) in self.inputs.iter().zip(&mut inputs) {
             *input = Self::read_one(path)?;
         }
+        Self::append_noctalia(&mut inputs[2], &self.noctalia)?;
         Ok(inputs)
     }
 
@@ -120,12 +136,67 @@ impl Sources {
                 Err(error) => failures.push(format!("{}: {error}", path.display())),
             }
         }
+        if let Err(error) = Self::append_noctalia(&mut inputs[2], &self.noctalia) {
+            failures.push(format!("Noctalia settings: {error}"));
+        }
         (inputs, failures)
+    }
+
+    fn append_noctalia(target: &mut Option<String>, paths: &[PathBuf]) -> io::Result<()> {
+        for path in paths {
+            if let Some(text) = Self::read_one(path)? {
+                let combined = target.get_or_insert_with(String::new);
+                combined.push('\n');
+                combined.push_str(&text);
+            }
+        }
+        Ok(())
     }
 
     /// What identifies each input without reading it, so an unchanged input costs one stat and no probe.
     pub fn stamps(&self) -> Stamps {
         std::array::from_fn(|at| {
+            if at == 2 && !self.noctalia.is_empty() {
+                let mut combined = std::fs::metadata(&self.inputs[at]).ok().map(|meta| {
+                    (
+                        meta.dev(),
+                        meta.ino(),
+                        meta.size(),
+                        meta.mtime(),
+                        meta.mtime_nsec(),
+                        meta.ctime(),
+                        meta.ctime_nsec(),
+                        meta.mode(),
+                    )
+                });
+                for path in &self.noctalia {
+                    if let Some(meta) = std::fs::metadata(path).ok() {
+                        let stamp = (
+                            meta.dev(),
+                            meta.ino(),
+                            meta.size(),
+                            meta.mtime(),
+                            meta.mtime_nsec(),
+                            meta.ctime(),
+                            meta.ctime_nsec(),
+                            meta.mode(),
+                        );
+                        combined = Some(combined.map_or(stamp, |old| {
+                            (
+                                old.0 ^ stamp.0,
+                                old.1 ^ stamp.1,
+                                old.2 ^ stamp.2,
+                                old.3 ^ stamp.3,
+                                old.4 ^ stamp.4,
+                                old.5 ^ stamp.5,
+                                old.6 ^ stamp.6,
+                                old.7 ^ stamp.7,
+                            )
+                        }));
+                    }
+                }
+                return combined;
+            }
             let meta = std::fs::metadata(&self.inputs[at]).ok()?;
             Some((
                 meta.dev(),
@@ -188,6 +259,7 @@ mod tests {
     fn sources(inputs: [PathBuf; 7]) -> Sources {
         Sources {
             inputs,
+            noctalia: Vec::new(),
             cache: PathBuf::from("/proc/self/flea-u01-no-cache/entry"),
         }
     }
@@ -210,11 +282,13 @@ mod tests {
         assert_eq!(launch, [None, None, None, None, None, None, None]);
         assert_eq!(failures.len(), 7);
         let valid = sources(std::array::from_fn(|_| PathBuf::from("/proc/self/status")));
-        assert!(valid
-            .read()
-            .unwrap()
-            .iter()
-            .all(|value| value.as_ref().is_some_and(|text| !text.is_empty())));
+        assert!(
+            valid
+                .read()
+                .unwrap()
+                .iter()
+                .all(|value| value.as_ref().is_some_and(|text| !text.is_empty()))
+        );
     }
 
     #[test]
