@@ -5,11 +5,7 @@
 <h1 align="center">Flea</h1>
 
 <p align="center">
-  <strong>The fastest GUI file manager on Omarchy.</strong>
-</p>
-
-<p align="center">
-  <a href="https://github.com/tcballard/omarchy-badges"><img src="https://raw.githubusercontent.com/tcballard/omarchy-badges/85f859029e236e784e7b05ada6dbe73506d07a91/badges/v1/built-for-omarchy.svg" alt="Built for Omarchy"></a>
+  <strong>A file manager built for cool Linux distros.</strong>
 </p>
 
 <p align="center">

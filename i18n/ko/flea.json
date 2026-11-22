@@ -1084,7 +1084,7 @@
   "settings.update.note_release": "Omarchy 업데이트가 새 릴리스를 설치합니다.",
   "settings.update.opening": "Omarchy 업데이트 여는 중 · 끝나면 Flea를 다시 시작하세요",
   "settings.update.launch_failed": "Omarchy 업데이트 도구를 시작할 수 없습니다.",
-  "settings.about.tagline": "Omarchy용 파일 관리자",
+  "settings.about.tagline": "A file manager built for cool Linux distros",
   "settings.about.version": "버전",
   "settings.about.built": "빌드",
   "settings.about.package": "패키지",

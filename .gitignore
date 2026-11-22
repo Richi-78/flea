@@ -13,11 +13,13 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Session artefacts: working documents for this project's own build sessions, never shipped.
-docs/
+# Local porting and progress notes; the rest of docs is source and build documentation.
+/docs/PIANO-CACHYOS-NIRI-NOCTALIA.md
+/docs/PROGRESS.md
 
 # Session and build-tracking state, never shipped.
 .superpowers/
+/build.md
 
 # Python bytecode from importing extensionless helpers, never shipped.
 __pycache__/

@@ -71,20 +71,20 @@ fn noctalia_setting(key: &str) -> Option<String> {
 // Prefer the standard locale precedence and reduce POSIX locale spellings (it_IT.UTF-8) to the
 // roster's BCP-47 form (it-IT); I18n::reload then falls back to the primary language if needed.
 fn system_language() -> String {
-    ["LC_ALL", "LC_MESSAGES", "LANG"].into_iter()
+    let value = ["LC_ALL", "LC_MESSAGES", "LANG"].into_iter()
         .filter_map(std::env::var_os)
         .map(|value| value.to_string_lossy().into_owned())
-        .find(|value| !value.is_empty() && value != "C" && value != "POSIX")
-        .map(|value| {
-            let value = value.split(['.', '@']).next().unwrap_or(&value);
-            let mut parts = value.splitn(2, ['_', '-']);
-            let language = parts.next().unwrap_or("en").to_ascii_lowercase();
-            match parts.next() {
-                Some(region) if !region.is_empty() => format!("{language}-{}", region.to_ascii_uppercase()),
-                _ => language,
-            }
-        })
-        .unwrap_or_else(|| "en".into())
+        .find(|value| !value.is_empty());
+    let Some(value) = value.filter(|value| value != "C" && value != "POSIX") else {
+        return "en".into();
+    };
+    let value = value.split(['.', '@']).next().unwrap_or(&value);
+    let mut parts = value.splitn(2, ['_', '-']);
+    let language = parts.next().unwrap_or("en").to_ascii_lowercase();
+    match parts.next() {
+        Some(region) if !region.is_empty() => format!("{language}-{}", region.to_ascii_uppercase()),
+        _ => language,
+    }
 }
 
 impl Default for Paths {

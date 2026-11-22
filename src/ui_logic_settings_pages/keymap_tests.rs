@@ -44,13 +44,9 @@ fn command_chord(preset: &str) -> u8 {
     }
 }
 
-// The Windows preset puts the view chords on Control and Shift.
-fn view_chord(preset: &str) -> u8 {
-    if preset == "windows" {
-        CTRL_SHIFT
-    } else {
-        CONTROL
-    }
+// Every preset uses Control for view chords; Windows uses the same Ctrl+1..4 spelling.
+fn view_chord(_preset: &str) -> u8 {
+    CONTROL
 }
 
 #[test]

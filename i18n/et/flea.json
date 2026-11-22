@@ -883,7 +883,7 @@
   "settings.update.note_release": "Omarchy uuendaja paigaldab uuemad väljalasked.",
   "settings.update.opening": "Omarchy uuendaja avamine · kui see lõpetab, käivita Flea uuesti",
   "settings.update.launch_failed": "Omarchy uuendajat ei õnnestunud käivitada.",
-  "settings.about.tagline": "Failihaldur Omarchy jaoks",
+  "settings.about.tagline": "A file manager built for cool Linux distros",
   "settings.about.version": "Versioon",
   "settings.about.built": "Ehitatud",
   "settings.about.installed_from": "Paigaldatud allikast",

@@ -36,7 +36,6 @@ depends=(
   'python'             # runs tools/flea-portal and tools/flea-filemanager1, which D-Bus activates
   'python-gobject'     # the D-Bus binding those two services answer with
   'quickjs-ng'         # qjs, which flea --figure-helper runs for Markdown maths and diagrams
-  'quickshell>=0.3.1'  # the vendored QML Commons/Ui layer and the legacy boot shell
   'qt6-declarative'    # HTML preview helper (src/backend/htmlreq.rs) until flea-html lands
   'qt6-webengine'      # HTML preview helper (src/backend/htmlreq.rs) until flea-html lands
   'ripgrep'            # searches file contents through the jailed rg worker

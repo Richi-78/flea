@@ -857,7 +857,7 @@
   "settings.update.note_release": "Omarchy 更新会安装较新的版本。",
   "settings.update.opening": "正在打开 Omarchy 更新 · 完成后请重新启动 Flea",
   "settings.update.launch_failed": "无法启动 Omarchy 的更新程序。",
-  "settings.about.tagline": "为 Omarchy 打造的文件管理器",
+  "settings.about.tagline": "A file manager built for cool Linux distros",
   "settings.about.version": "版本",
   "settings.about.built": "构建时间",
   "settings.about.installed_from": "安装来源",

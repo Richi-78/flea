@@ -36,9 +36,11 @@ fn run(code: &str, name: &str) {
     let module = module_path!().split_once("::").unwrap().1;
     let output = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", &format!("{module}::{name}"), "--nocapture"])
+        .env("LC_ALL", "C")
         .env("SOL_KIND_LANG_CHILD", code)
         .env("OMARCHY_PATH", root.join("omarchy"))
         .env("OMARCHY_LANGUAGE_FILE", root.join("language"))
+        .env("FLEA_LANGUAGE_FILE", root.join("language"))
         .env("FLEA_I18N", root.join("catalog"))
         .output()
         .unwrap();

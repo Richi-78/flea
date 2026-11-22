@@ -181,6 +181,7 @@ fn real_bsdtar(tag: &str, names: &str, damage: &str) -> (String, String) {
         .unwrap()
         .success());
     let output = std::process::Command::new("bsdtar")
+        .env("LC_ALL", "C")
         .args(["-v", "-x", "-f"])
         .arg(&archive)
         .arg("-C")

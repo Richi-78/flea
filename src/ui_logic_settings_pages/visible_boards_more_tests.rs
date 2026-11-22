@@ -165,7 +165,7 @@ pub(super) const BOARDS: &[super::Board] = &[
         r#"{}"#,
         &[
             "Flea",
-            "A file manager for Omarchy",
+            "A file manager built for cool Linux distros",
             "Version",
             "0.4.0",
             "Built",

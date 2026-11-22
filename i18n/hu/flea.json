@@ -883,7 +883,7 @@
   "settings.update.note_release": "Az Omarchy frissítője telepíti az újabb kiadásokat.",
   "settings.update.opening": "Az Omarchy frissítőjének megnyitása · a végén indítsd újra a Fleát",
   "settings.update.launch_failed": "Az Omarchy frissítője nem indítható el.",
-  "settings.about.tagline": "Fájlkezelő az Omarchyhoz",
+  "settings.about.tagline": "A file manager built for cool Linux distros",
   "settings.about.version": "Verzió",
   "settings.about.built": "Fordítás ideje",
   "settings.about.installed_from": "Telepítés forrása",

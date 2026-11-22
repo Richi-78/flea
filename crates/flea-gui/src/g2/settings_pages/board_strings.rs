@@ -440,7 +440,7 @@ pub(super) const ABOUT: &[&str] = &[
     "Display",
     "Menus",
     "Flea",
-    "A file manager for niri",
+    "A file manager built for cool Linux distros",
     "Version",
     "0.4.0",
     "Built",

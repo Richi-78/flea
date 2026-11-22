@@ -185,7 +185,7 @@ pub(super) fn case_with(
         "settings-keys" => vec!["Keybinding preset"],
         "settings-display" => vec!["Text size"],
         "settings-menus" => vec!["Show keyboard hints"],
-        "settings-about" => vec!["A file manager for niri"],
+        "settings-about" => vec!["A file manager built for cool Linux distros"],
         "settings-search" => vec!["Settings", "font"],
         "keyboard-sheet" => vec!["Keyboard Shortcuts"],
         "copy-to-dialog" => vec!["Copy To", "DESTINATION FOLDER"],

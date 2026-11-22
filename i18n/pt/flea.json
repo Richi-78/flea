@@ -899,7 +899,7 @@
   "settings.update.note_release": "A atualização do Omarchy instala as versões mais recentes.",
   "settings.update.opening": "A abrir a atualização do Omarchy · reinicia o Flea quando terminar",
   "settings.update.launch_failed": "Não foi possível iniciar o atualizador do Omarchy.",
-  "settings.about.tagline": "Um gestor de ficheiros para o Omarchy",
+  "settings.about.tagline": "A file manager built for cool Linux distros",
   "settings.about.version": "Versão",
   "settings.about.built": "Compilação",
   "settings.about.installed_from": "Instalado a partir de",
