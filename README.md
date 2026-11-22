@@ -5,7 +5,7 @@
 <h1 align="center">Flea</h1>
 
 <p align="center">
-  <strong>The fastest GUI file manager on Omarchy.</strong>
+  <strong>The fastest GUI file manager on Omarchy. Now also available for CachyOs with Niri</strong>
 </p>
 
 <p align="center">
