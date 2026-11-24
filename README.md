@@ -31,45 +31,46 @@
 - **Desktop integration.** Default file manager, “Show in folder” and Open/Save dialogs.
 - **Your settings.** Omarchy text sizes, configurable menus, and Default, Vim, Mac or Windows keys.
 
+## This fork: CachyOS, niri and Noctalia
+
+This branch ports Flea for **CachyOS**, the **niri** compositor and the **Noctalia** shell. It is
+not an Omarchy or Hyprland setup: those are not dependencies or targets of this fork. The windowed
+application is GPUI-first (`flea-gui`); the legacy QML UI is not the normal launch path, and
+Quickshell (`qs`) is not required to build or run the GUI.
+
+The port uses Noctalia's Flea theme files under `$XDG_STATE_HOME/flea/theme/` and its own local
+CachyOS package recipe. Follow the [installation guide](docs/install-on-cachy.md) to build and
+install the package from a separate build directory. For a compile-only release build, use
+`cargo build --release --locked`; this does not install anything. Do not use the Omarchy repository,
+AUR installation instructions or Omarchy desktop commands for this branch.
+
+Work remaining and the current verification checklist are recorded in
+[`PROGRESS.md`](PROGRESS.md). The porting plan and architecture notes in `docs/` are local-only and
+are not included in this fork's remote.
+
 ## Install
 
-Flea is available only from the Omarchy Package Repository. Install it and make it your default
-file manager, file chooser and the app opened by **Super+Shift+F**:
+Build the local package and install it with pacman; the CachyOS guide has the safe separate-build-
+directory steps and first-run checks:
 
-```bash
-omarchy pkg add flea && flea --default
-```
-
-Run `flea --default` from a terminal in your session so file dialogs switch at once. `flea --default off`
-undoes it, and Settings > About has the same switch. To try Flea without changing your defaults, run
-only `omarchy pkg add flea`. Updates come with `omarchy update`.
-
-On an AUR `flea-bin` or `flea-git` install, run this and answer `y` when pacman asks to remove it:
-
-```bash
-sudo pacman -S flea
-```
+[**CachyOS + niri installation guide**](docs/install-on-cachy.md)
 
 <details>
-<summary>File chooser only, development build and removal</summary>
+<summary>Default file manager, file picker and removal</summary>
 
-Use Flea for portal Open/Save dialogs without changing your default file manager:
-
-```bash
-flea --picker
-```
-
-To try unreleased changes from `main`, [build Flea from source](#build).
-
-Before removing Flea, undo its desktop integration, then drop the package:
+After installing the package, these optional per-user commands configure desktop integration:
 
 ```bash
-flea --default off
-omarchy pkg drop flea
+flea --default       # folders, “Show in folder” and the system file chooser
+flea --picker        # only the system file chooser
 ```
 
-[Installation details](docs/install.md) cover dependencies, desktop integration and removal.
+The picker route applies to applications that use **xdg-desktop-portal**; apps with their own
+native dialogs may not use it. To undo either choice, run `flea --default off` or `flea --picker off`.
+For a first setup, troubleshooting and clean removal steps, see the
+[CachyOS + niri installation guide](docs/install-on-cachy.md).
 
+To try unreleased changes, see [Build](#build).
 </details>
 
 ## Views
@@ -215,8 +216,8 @@ To open a folder and know when a window shows it, run `flea /path/to/folder`, th
 
 ## Build
 
-Requires Omarchy and Rust. See
-[installation details](docs/install.md) for runtime and optional dependencies.
+Requires Rust and the dependencies listed in the local `PKGBUILD`; Omarchy is not required.
+For a release build without installing it, run:
 
 ```bash
 cargo build --locked --release --workspace

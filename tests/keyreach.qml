@@ -123,7 +123,7 @@ ShellRoot {
         act("columns keeps the keyboard", function () { root.same(root.view(), "chrome:columns", "a view mark keeps the keyboard"); root.reach("grid"); root.key(Qt.Key_Return) })
         wait("grid view", function () { return pane.viewMode === "grid" })
         act("the grid brings filter and sort in", function () {
-            root.check(root.glyphs().indexOf("filter,sort") > 0 && root.glyphs().indexOf("search") < 0, "grid controls " + root.glyphs())
+            root.check(root.glyphs().indexOf("search") >= 0 && root.glyphs().indexOf("filter,sort") > 0, "grid controls " + root.glyphs())
             root.reach("sort"); root.key(Qt.Key_Return)
         })
         act("sort asked, filter next", function () { root.check(root.counts.sort === 1, "Return on Sort did not reach the sort action"); root.same(root.view(), "chrome:sort", "Sort keeps the keyboard"); root.reach("filter"); root.key(Qt.Key_Return) })

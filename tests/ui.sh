@@ -5140,7 +5140,7 @@ grid_chrome_inventory() {
     local view="$1" available="${2:-true}" glyph state visible
     for glyph in search filter sort list columns grid dual sliders; do
         visible=true
-        case "$glyph:$view" in search:grid|filter:list|filter:columns|sort:list|sort:columns) visible=false ;; esac
+        case "$glyph:$view" in filter:list|filter:columns|sort:list|sort:columns) visible=false ;; esac
         state=$(ipc chromeButtonState "$glyph") || fail "grid chrome: $glyph observer failed"
         jq -e --argjson visible "$visible" '.visible == $visible' <<< "$state" >/dev/null \
             || fail "grid chrome: $view has the wrong $glyph visibility: $state"

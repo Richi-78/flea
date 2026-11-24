@@ -282,7 +282,6 @@ Item {
         Flea.ChromeButton {
             inputLive: root.inputLive
             ruleRows: Theme.spacing.hairline
-            visible: root.viewMode !== "grid"
             glyph: "search"
             keyboardFocused: root.stopFocused && root.focusedGlyph === glyph
             onActivated: root.searchRequested()

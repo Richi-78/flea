@@ -52,7 +52,51 @@ flea
 flea --tui
 ```
 
-To set Flea as your default file manager, run `flea --default`; use `flea --default off` to undo that preference. Flea works without Noctalia theming, but to follow the active Noctalia palette configure the Flea user template described in [`PIANO-CACHYOS-NIRI-NOCTALIA.md`](PIANO-CACHYOS-NIRI-NOCTALIA.md). The template writes theme data under `$XDG_STATE_HOME/flea/theme` (normally `~/.local/state/flea/theme`).
+### Optional desktop integration
+
+These commands configure **per-user** desktop preferences; you can choose either or both:
+
+```bash
+flea --default       # folder handler, “Show in folder” and system file chooser
+flea --picker        # system file chooser only
+```
+
+Undo them with `flea --default off` and `flea --picker off`, respectively. Run the command in your
+user session, not with `sudo`: the preferences belong to your home directory. `--default` includes
+the picker integration; use `--picker` alone if you want to keep another file manager as the folder
+handler.
+
+The system chooser integration uses **xdg-desktop-portal**. It affects apps that request a chooser
+through the portal, not applications that create their own GTK/Qt dialog. After enabling it, test
+Open and Save from an app known to use the portal. If the old chooser is still shown, check that the
+portal service is available and running in your user session, then restart it and retry:
+
+```bash
+systemctl --user status xdg-desktop-portal.service
+systemctl --user restart xdg-desktop-portal.service
+```
+
+Noctalia theming is optional. To follow its palette, configure the Flea user template; the template
+writes theme data under `$XDG_STATE_HOME/flea/theme` (normally `~/.local/state/flea/theme`). The
+current template setup is recorded in the local porting notes `docs/PIANO-CACHYOS-NIRI-NOCTALIA.md`.
+
+### Verify and remove
+
+Check the folder association with:
+
+```bash
+xdg-mime query default inode/directory
+```
+
+To remove Flea cleanly, undo whichever integrations you enabled before removing the package:
+
+```bash
+flea --default off
+flea --picker off
+sudo pacman -Rns flea
+```
+
+If you enabled only one integration, only its matching `off` command is needed.
 
 ## Rebuild and remove
 
